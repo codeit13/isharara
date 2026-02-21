@@ -14,6 +14,7 @@ import CheckoutPage from "@/pages/CheckoutPage";
 import DealsPage from "@/pages/DealsPage";
 import BundlePage from "@/pages/BundlePage";
 import AdminPage from "@/pages/AdminPage";
+import AccountPage from "@/pages/AccountPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -27,6 +28,7 @@ function Router() {
       <Route path="/deals" component={DealsPage} />
       <Route path="/bundles" component={BundlePage} />
       <Route path="/admin" component={AdminPage} />
+      <Route path="/account" component={AccountPage} />
       <Route component={NotFound} />
     </Switch>
   );

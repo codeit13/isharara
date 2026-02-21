@@ -3,12 +3,7 @@ import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb, se
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
-  role: text("role").notNull().default("customer"),
-});
+export * from "./models/auth";
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
@@ -46,6 +41,7 @@ export const reviews = pgTable("reviews", {
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
+  userId: varchar("user_id"),
   customerName: text("customer_name").notNull(),
   email: text("email").notNull(),
   phone: text("phone").notNull(),
@@ -81,7 +77,6 @@ export const subscribers = pgTable("subscribers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({ username: true, password: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertProductSizeSchema = createInsertSchema(productSizes).omit({ id: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
@@ -89,8 +84,6 @@ export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, cre
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true });
 export const insertSubscriberSchema = createInsertSchema(subscribers).omit({ id: true, createdAt: true });
 
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type ProductSize = typeof productSizes.$inferSelect;

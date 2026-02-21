@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, CreditCard, Banknote, CheckCircle2 } from "lucide-react";
@@ -9,11 +9,13 @@ import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [form, setForm] = useState({
@@ -24,6 +26,16 @@ export default function CheckoutPage() {
     city: "",
     pincode: "",
   });
+
+  useEffect(() => {
+    if (user) {
+      setForm((prev) => ({
+        ...prev,
+        customerName: prev.customerName || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        email: prev.email || user.email || "",
+      }));
+    }
+  }, [user]);
 
   const shipping = totalPrice >= 1499 ? 0 : 99;
   const grandTotal = totalPrice + shipping;

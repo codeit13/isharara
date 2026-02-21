@@ -1,5 +1,4 @@
 import {
-  type User, type InsertUser,
   type Product, type InsertProduct,
   type ProductSize, type InsertProductSize,
   type Review, type InsertReview,
@@ -7,16 +6,12 @@ import {
   type Promotion, type InsertPromotion,
   type Subscriber, type InsertSubscriber,
   type ProductWithSizes,
-  users, products, productSizes, reviews, orders, promotions, subscribers,
+  products, productSizes, reviews, orders, promotions, subscribers,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-
   getProducts(): Promise<ProductWithSizes[]>;
   getProduct(id: number): Promise<ProductWithSizes | undefined>;
   createProduct(product: InsertProduct, sizes: InsertProductSize[]): Promise<ProductWithSizes>;
@@ -27,6 +22,7 @@ export interface IStorage {
   createReview(review: InsertReview): Promise<Review>;
 
   getOrders(): Promise<Order[]>;
+  getOrdersByUserId(userId: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
 
@@ -39,21 +35,6 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  async getUser(id: number): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  }
-
   async getProducts(): Promise<ProductWithSizes[]> {
     const allProducts = await db.select().from(products);
     const allSizes = await db.select().from(productSizes);
@@ -122,6 +103,10 @@ export class DatabaseStorage implements IStorage {
 
   async getOrders(): Promise<Order[]> {
     return db.select().from(orders).orderBy(desc(orders.createdAt));
+  }
+
+  async getOrdersByUserId(userId: string): Promise<Order[]> {
+    return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
   }
 
   async createOrder(order: InsertOrder): Promise<Order> {

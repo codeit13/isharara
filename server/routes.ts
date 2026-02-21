@@ -2,17 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertReviewSchema, insertOrderSchema, insertSubscriberSchema, insertPromotionSchema, insertProductSchema } from "@shared/schema";
-
-const adminKey = process.env.SESSION_SECRET || "ishqara-admin-2026";
-
-function isAdmin(req: any, res: any, next: any) {
-  const key = req.headers["x-admin-key"];
-  if (key && key === adminKey) {
-    return next();
-  }
-  next();
-}
+import { isAuthenticated } from "./replit_integrations/auth";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -37,13 +27,16 @@ export async function registerRoutes(
 
   app.post("/api/products/:id/reviews", async (req, res) => {
     try {
-      const data = insertReviewSchema.parse({
-        productId: Number(req.params.id),
-        customerName: req.body.customerName,
-        rating: req.body.rating,
-        comment: req.body.comment,
+      const reviewSchema = z.object({
+        customerName: z.string().min(1),
+        rating: z.number().min(1).max(5),
+        comment: z.string().min(1),
       });
-      const review = await storage.createReview(data);
+      const data = reviewSchema.parse(req.body);
+      const review = await storage.createReview({
+        productId: Number(req.params.id),
+        ...data,
+      });
       res.json(review);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -77,10 +70,22 @@ export async function registerRoutes(
         paymentMethod: z.enum(["cod", "razorpay"]),
       });
       const data = orderSchema.parse(req.body);
-      const order = await storage.createOrder(data);
+      const user = (req as any).user;
+      const userId = user?.claims?.sub || null;
+      const order = await storage.createOrder({ ...data, userId });
       res.json(order);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/my-orders", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const userOrders = await storage.getOrdersByUserId(userId);
+      res.json(userOrders);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
     }
   });
 
@@ -149,7 +154,7 @@ export async function registerRoutes(
         stock: z.number().min(0),
       })).min(1);
       const validatedSizes = sizeSchema.parse(sizes);
-      const product = await storage.updateProduct(Number(req.params.id), productData, validatedSizes);
+      const product = await storage.updateProduct(Number(req.params.id), productData, validatedSizes.map(s => ({ ...s, originalPrice: s.originalPrice ?? null })));
       if (!product) return res.status(404).json({ message: "Product not found" });
       res.json(product);
     } catch (e: any) {
