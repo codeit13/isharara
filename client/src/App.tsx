@@ -3,14 +3,30 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
+import SubscribePopup from "@/components/SubscribePopup";
+import HomePage from "@/pages/HomePage";
+import ShopPage from "@/pages/ShopPage";
+import ProductPage from "@/pages/ProductPage";
+import CartPage from "@/pages/CartPage";
+import CheckoutPage from "@/pages/CheckoutPage";
+import DealsPage from "@/pages/DealsPage";
+import BundlePage from "@/pages/BundlePage";
+import AdminPage from "@/pages/AdminPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
   return (
     <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
+      <Route path="/" component={HomePage} />
+      <Route path="/shop" component={ShopPage} />
+      <Route path="/product/:id" component={ProductPage} />
+      <Route path="/cart" component={CartPage} />
+      <Route path="/checkout" component={CheckoutPage} />
+      <Route path="/deals" component={DealsPage} />
+      <Route path="/bundles" component={BundlePage} />
+      <Route path="/admin" component={AdminPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -20,8 +36,15 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
+        <div className="min-h-screen flex flex-col bg-background">
+          <Navbar />
+          <main className="flex-1">
+            <Router />
+          </main>
+          <Footer />
+        </div>
+        <SubscribePopup />
         <Toaster />
-        <Router />
       </TooltipProvider>
     </QueryClientProvider>
   );

@@ -1,18 +1,118 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: serial("id").primaryKey(),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  role: text("role").notNull().default("customer"),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  brand: text("brand").notNull().default("ISHQARA"),
+  description: text("description").notNull(),
+  category: text("category").notNull(),
+  notes: text("notes").array().notNull(),
+  image: text("image").notNull(),
+  isBestseller: boolean("is_bestseller").notNull().default(false),
+  isTrending: boolean("is_trending").notNull().default(false),
+  isNewArrival: boolean("is_new_arrival").notNull().default(false),
+  gender: text("gender").notNull().default("unisex"),
+  avgRating: decimal("avg_rating", { precision: 2, scale: 1 }).notNull().default("0"),
+  reviewCount: integer("review_count").notNull().default(0),
 });
+
+export const productSizes = pgTable("product_sizes", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  size: text("size").notNull(),
+  price: integer("price").notNull(),
+  originalPrice: integer("original_price"),
+  stock: integer("stock").notNull().default(0),
+});
+
+export const reviews = pgTable("reviews", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull(),
+  customerName: text("customer_name").notNull(),
+  rating: integer("rating").notNull(),
+  comment: text("comment").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  customerName: text("customer_name").notNull(),
+  email: text("email").notNull(),
+  phone: text("phone").notNull(),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  pincode: text("pincode").notNull(),
+  items: jsonb("items").notNull(),
+  subtotal: integer("subtotal").notNull(),
+  discount: integer("discount").notNull().default(0),
+  total: integer("total").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const promotions = pgTable("promotions", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  description: text("description").notNull(),
+  discountType: text("discount_type").notNull(),
+  discountValue: integer("discount_value").notNull(),
+  code: text("code"),
+  isActive: boolean("is_active").notNull().default(true),
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+});
+
+export const subscribers = pgTable("subscribers", {
+  id: serial("id").primaryKey(),
+  email: text("email"),
+  phone: text("phone"),
+  source: text("source").notNull().default("popup"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).pick({ username: true, password: true });
+export const insertProductSchema = createInsertSchema(products).omit({ id: true });
+export const insertProductSizeSchema = createInsertSchema(productSizes).omit({ id: true });
+export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true, status: true });
+export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true });
+export const insertSubscriberSchema = createInsertSchema(subscribers).omit({ id: true, createdAt: true });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type ProductSize = typeof productSizes.$inferSelect;
+export type InsertProductSize = z.infer<typeof insertProductSizeSchema>;
+export type Review = typeof reviews.$inferSelect;
+export type InsertReview = z.infer<typeof insertReviewSchema>;
+export type Order = typeof orders.$inferSelect;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Promotion = typeof promotions.$inferSelect;
+export type InsertPromotion = z.infer<typeof insertPromotionSchema>;
+export type Subscriber = typeof subscribers.$inferSelect;
+export type InsertSubscriber = z.infer<typeof insertSubscriberSchema>;
+
+export type CartItem = {
+  productId: number;
+  name: string;
+  image: string;
+  size: string;
+  price: number;
+  quantity: number;
+};
+
+export type ProductWithSizes = Product & {
+  sizes: ProductSize[];
+};
