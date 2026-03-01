@@ -67,11 +67,13 @@ export default function Navbar() {
                     </div>
                   </Link>
                 )}
-                <Link href="/admin" onClick={() => setOpen(false)}>
-                  <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground cursor-pointer" data-testid="link-mobile-admin">
-                    Admin
-                  </div>
-                </Link>
+                {user?.isAdmin && (
+                  <Link href="/admin" onClick={() => setOpen(false)}>
+                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground cursor-pointer" data-testid="link-mobile-admin">
+                      Admin
+                    </div>
+                  </Link>
+                )}
               </div>
             </SheetContent>
           </Sheet>
@@ -129,12 +131,14 @@ export default function Navbar() {
                     My Orders
                   </DropdownMenuItem>
                 </Link>
-                <Link href="/admin">
-                  <DropdownMenuItem className="cursor-pointer" data-testid="link-admin">
-                    <User className="mr-2 h-4 w-4" />
-                    Admin
-                  </DropdownMenuItem>
-                </Link>
+                {user?.isAdmin && (
+                  <Link href="/admin">
+                    <DropdownMenuItem className="cursor-pointer" data-testid="link-admin">
+                      <User className="mr-2 h-4 w-4" />
+                      Admin
+                    </DropdownMenuItem>
+                  </Link>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer text-destructive"
@@ -147,16 +151,29 @@ export default function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => { window.location.href = "/api/login"; }}
-              className="text-sm font-medium"
-              data-testid="button-login"
-            >
-              <User className="w-4 h-4 mr-1" />
-              Login
-            </Button>
+            <>
+              <Link href="/login">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-sm font-medium"
+                  data-testid="button-login"
+                >
+                  <User className="w-4 h-4 mr-1" />
+                  Login
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="text-sm font-medium"
+                  data-testid="button-register"
+                >
+                  Sign up
+                </Button>
+              </Link>
+            </>
           )}
           <Link href="/cart">
             <Button size="icon" variant="ghost" className="relative" data-testid="button-cart">

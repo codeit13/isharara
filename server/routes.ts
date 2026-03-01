@@ -2,7 +2,13 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { isAuthenticated } from "./replit_integrations/auth";
+import { isAuthenticated, requireAdmin } from "./auth";
+import {
+  isRazorpayConfigured,
+  getRazorpayKeyId,
+  createRazorpayOrder,
+  verifyPaymentSignature,
+} from "./razorpay";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -71,17 +77,74 @@ export async function registerRoutes(
       });
       const data = orderSchema.parse(req.body);
       const user = (req as any).user;
-      const userId = user?.claims?.sub || null;
+      const userId = user?.id || null;
       const order = await storage.createOrder({ ...data, userId });
-      res.json(order);
+
+      if (data.paymentMethod === "razorpay") {
+        if (!isRazorpayConfigured()) {
+          return res.status(503).json({ message: "Online payment is temporarily unavailable" });
+        }
+        const amountPaise = Math.round(data.total * 100);
+        const rzpOrder = await createRazorpayOrder(amountPaise, String(order.id));
+        await storage.setOrderRazorpayOrderId(order.id, rzpOrder.id);
+        return res.json({
+          order,
+          razorpay: {
+            orderId: rzpOrder.id,
+            amount: amountPaise,
+            currency: "INR",
+            keyId: getRazorpayKeyId(),
+          },
+        });
+      }
+
+      res.json({ order });
     } catch (e: any) {
       res.status(400).json({ message: e.message });
     }
   });
 
+  app.post("/api/orders/:id/verify-payment", async (req, res) => {
+    try {
+      const orderId = Number(req.params.id);
+      const body = z.object({
+        razorpay_order_id: z.string(),
+        razorpay_payment_id: z.string(),
+        razorpay_signature: z.string(),
+      }).parse(req.body);
+
+      const order = await storage.getOrder(orderId);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+      if (order.paymentMethod !== "razorpay") {
+        return res.status(400).json({ message: "Order is not a Razorpay order" });
+      }
+      if (order.razorpayOrderId !== body.razorpay_order_id) {
+        return res.status(400).json({ message: "Order ID mismatch" });
+      }
+
+      const valid = verifyPaymentSignature(
+        body.razorpay_order_id,
+        body.razorpay_payment_id,
+        body.razorpay_signature
+      );
+      if (!valid) {
+        return res.status(400).json({ message: "Invalid payment signature" });
+      }
+
+      const updated = await storage.updateOrderPayment(
+        orderId,
+        body.razorpay_payment_id,
+        "confirmed"
+      );
+      res.json({ order: updated });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message || "Verification failed" });
+    }
+  });
+
   app.get("/api/my-orders", isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = req.user.id;
       const userOrders = await storage.getOrdersByUserId(userId);
       res.json(userOrders);
     } catch (e: any) {
@@ -107,12 +170,12 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/orders", async (_req, res) => {
+  app.get("/api/admin/orders", isAuthenticated, requireAdmin, async (_req, res) => {
     const allOrders = await storage.getOrders();
     res.json(allOrders);
   });
 
-  app.patch("/api/orders/:id", async (req, res) => {
+  app.patch("/api/orders/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const statusSchema = z.object({
         status: z.enum(["pending", "confirmed", "shipped", "delivered", "cancelled"]),
@@ -126,7 +189,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/admin/products", async (req, res) => {
+  app.post("/api/admin/products", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const { sizes, ...productData } = req.body;
       const sizeSchema = z.array(z.object({
@@ -143,7 +206,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/admin/products/:id", async (req, res) => {
+  app.put("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const { sizes, ...productData } = req.body;
       const sizeSchema = z.array(z.object({
@@ -162,12 +225,12 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/admin/products/:id", async (req, res) => {
+  app.delete("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     await storage.deleteProduct(Number(req.params.id));
     res.json({ success: true });
   });
 
-  app.post("/api/admin/promotions", async (req, res) => {
+  app.post("/api/admin/promotions", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const promoSchema = z.object({
         title: z.string().min(1),
@@ -187,13 +250,13 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/admin/promotions/:id", async (req, res) => {
+  app.patch("/api/admin/promotions/:id", isAuthenticated, requireAdmin, async (req, res) => {
     const updated = await storage.updatePromotion(Number(req.params.id), req.body);
     if (!updated) return res.status(404).json({ message: "Promotion not found" });
     res.json(updated);
   });
 
-  app.get("/api/admin/subscribers", async (_req, res) => {
+  app.get("/api/admin/subscribers", isAuthenticated, requireAdmin, async (_req, res) => {
     const subs = await storage.getSubscribers();
     res.json(subs);
   });

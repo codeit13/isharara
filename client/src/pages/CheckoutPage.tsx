@@ -1,15 +1,16 @@
 import { useState, useEffect } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, CreditCard, Banknote, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CreditCard, Banknote, CheckCircle2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
-import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { loadRazorpay } from "@/lib/razorpay";
+import type { Order, Promotion } from "@shared/schema";
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
@@ -18,6 +19,10 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const [paymentMethod, setPaymentMethod] = useState("cod");
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const [placedOrderId, setPlacedOrderId] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [appliedPromo, setAppliedPromo] = useState<Promotion | null>(null);
   const [form, setForm] = useState({
     customerName: "",
     email: "",
@@ -38,34 +43,146 @@ export default function CheckoutPage() {
   }, [user]);
 
   const shipping = totalPrice >= 1499 ? 0 : 99;
-  const grandTotal = totalPrice + shipping;
+  const { data: promotions } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
 
-  const placeOrderMutation = useMutation({
-    mutationFn: async () => {
-      const orderItems = items.map((i) => ({
-        productId: i.productId,
-        name: i.name,
-        size: i.size,
-        price: i.price,
-        quantity: i.quantity,
-      }));
-      await apiRequest("POST", "/api/orders", {
-        ...form,
-        items: orderItems,
-        subtotal: totalPrice,
-        discount: 0,
-        total: grandTotal,
-        paymentMethod,
+  const discountAmount = (() => {
+    if (!appliedPromo || !appliedPromo.isActive) return 0;
+    if (appliedPromo.discountType === "percentage") {
+      return Math.round((totalPrice + shipping) * (appliedPromo.discountValue / 100));
+    }
+    if (appliedPromo.discountType === "flat") {
+      return Math.min(appliedPromo.discountValue, totalPrice + shipping);
+    }
+    return 0;
+  })();
+
+  const grandTotal = Math.max(0, totalPrice + shipping - discountAmount);
+
+  const applyPromo = () => {
+    const code = promoCode.trim().toUpperCase();
+    if (!code) return;
+    const promo = promotions?.find((p) => p.isActive && p.code?.toUpperCase() === code);
+    if (promo) {
+      setAppliedPromo(promo);
+      toast({ title: `Code "${promo.code}" applied` });
+    } else {
+      setAppliedPromo(null);
+      toast({ title: "Invalid or expired code", variant: "destructive" });
+    }
+  };
+
+  const removePromo = () => {
+    setAppliedPromo(null);
+    setPromoCode("");
+  };
+
+  const orderPayload = () => {
+    const orderItems = items.map((i) => ({
+      productId: i.productId,
+      name: i.name,
+      size: i.size,
+      price: i.price,
+      quantity: i.quantity,
+    }));
+    return {
+      ...form,
+      items: orderItems,
+      subtotal: totalPrice,
+      discount: discountAmount,
+      total: grandTotal,
+      paymentMethod,
+    };
+  };
+
+  const handleOrderSuccess = (order: Order) => {
+    setPlacedOrderId(order.id);
+    clearCart();
+    setOrderPlaced(true);
+  };
+
+  const openRazorpayCheckout = async (order: Order, razorpay: { orderId: string; amount: number; currency: string; keyId: string }) => {
+    const Razorpay = await loadRazorpay();
+    const options = {
+      key: razorpay.keyId,
+      amount: razorpay.amount,
+      order_id: razorpay.orderId,
+      name: "ISHQARA",
+      description: `Order #${order.id}`,
+      prefill: {
+        name: form.customerName,
+        email: form.email,
+        contact: form.phone.replace(/\D/g, "").slice(-10),
+      },
+      handler: async (response: { razorpay_payment_id: string; razorpay_order_id: string; razorpay_signature: string }) => {
+        try {
+          const verifyRes = await fetch(`/api/orders/${order.id}/verify-payment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            }),
+          });
+          const verifyData = await verifyRes.json().catch(() => ({}));
+          if (!verifyRes.ok) {
+            toast({ title: verifyData.message || "Payment verification failed", variant: "destructive" });
+            return;
+          }
+          handleOrderSuccess(verifyData.order);
+          toast({ title: "Payment successful! Order confirmed." });
+        } catch {
+          toast({ title: "Payment verification failed", variant: "destructive" });
+        } finally {
+          setIsSubmitting(false);
+        }
+      },
+      modal: {
+        ondismiss: () => {
+          setIsSubmitting(false);
+          toast({ title: "Payment cancelled", variant: "destructive" });
+        },
+      },
+    };
+    const rzp = new Razorpay(options);
+    rzp.open();
+  };
+
+  const handlePlaceOrder = async () => {
+    if (!form.customerName || !form.email || !form.phone || !form.address || !form.city || !form.pincode) {
+      toast({ title: "Please fill all delivery details", variant: "destructive" });
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const res = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(orderPayload()),
       });
-    },
-    onSuccess: () => {
-      clearCart();
-      setOrderPlaced(true);
-    },
-    onError: () => {
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast({ title: data.message || "Failed to place order", variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
+
+      const order = data.order as Order;
+
+      if (data.razorpay) {
+        await openRazorpayCheckout(order, data.razorpay);
+      } else {
+        handleOrderSuccess(order);
+        toast({ title: "Order placed successfully!" });
+        setIsSubmitting(false);
+      }
+    } catch {
       toast({ title: "Failed to place order", description: "Please try again", variant: "destructive" });
-    },
-  });
+      setIsSubmitting(false);
+    }
+  };
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -80,12 +197,20 @@ export default function CheckoutPage() {
           <CheckCircle2 className="w-8 h-8 text-green-600" />
         </div>
         <h1 className="font-serif text-2xl font-bold mb-2">Order Placed!</h1>
+        {placedOrderId && (
+          <p className="text-sm text-muted-foreground mb-2">Order #{placedOrderId}</p>
+        )}
         <p className="text-sm text-muted-foreground mb-6">
-          Thank you for your order. We'll send you a confirmation email with tracking details shortly.
+          Thank you for your order. We&apos;ll send you a confirmation email with tracking details shortly.
         </p>
-        <Link href="/shop">
-          <Button data-testid="button-continue-shopping">Continue Shopping</Button>
-        </Link>
+        <div className="flex gap-3 justify-center">
+          <Link href="/account">
+            <Button variant="outline" data-testid="button-view-orders">View My Orders</Button>
+          </Link>
+          <Link href="/shop">
+            <Button data-testid="button-continue-shopping">Continue Shopping</Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -167,7 +292,7 @@ export default function CheckoutPage() {
                 <CreditCard className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium">Pay Online</p>
-                  <p className="text-xs text-muted-foreground">UPI, Card, Net Banking</p>
+                  <p className="text-xs text-muted-foreground">UPI, Card, Net Banking (Razorpay)</p>
                 </div>
               </button>
             </div>
@@ -197,19 +322,43 @@ export default function CheckoutPage() {
                 <span className="text-muted-foreground">Shipping</span>
                 <span>{shipping === 0 ? "Free" : `Rs. ${shipping}`}</span>
               </div>
+              {appliedPromo && discountAmount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span className="flex items-center gap-1">
+                    Discount ({appliedPromo.code})
+                    <button type="button" onClick={removePromo} className="p-0.5 rounded hover:bg-muted" aria-label="Remove code">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                  <span>- Rs. {discountAmount.toLocaleString()}</span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between font-bold text-base">
                 <span>Total</span>
                 <span data-testid="text-checkout-total">Rs. {grandTotal.toLocaleString()}</span>
               </div>
             </div>
+            {!appliedPromo && promotions && promotions.some((p) => p.isActive && p.code) && (
+              <div className="mt-3 flex gap-2">
+                <Input
+                  placeholder="Promo code"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value)}
+                  className="flex-1"
+                />
+                <Button type="button" variant="outline" size="sm" onClick={applyPromo}>
+                  Apply
+                </Button>
+              </div>
+            )}
             <Button
               className="w-full mt-4"
-              disabled={!isFormValid || placeOrderMutation.isPending}
-              onClick={() => placeOrderMutation.mutate()}
+              disabled={!isFormValid || isSubmitting}
+              onClick={handlePlaceOrder}
               data-testid="button-place-order"
             >
-              {placeOrderMutation.isPending ? "Placing Order..." : `Place Order - Rs. ${grandTotal.toLocaleString()}`}
+              {isSubmitting ? "Processing..." : `Place Order - Rs. ${grandTotal.toLocaleString()}`}
             </Button>
           </div>
         </div>

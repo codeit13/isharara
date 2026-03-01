@@ -15,6 +15,8 @@ import DealsPage from "@/pages/DealsPage";
 import BundlePage from "@/pages/BundlePage";
 import AdminPage from "@/pages/AdminPage";
 import AccountPage from "@/pages/AccountPage";
+import LoginPage from "@/pages/LoginPage";
+import RegisterPage from "@/pages/RegisterPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -29,6 +31,8 @@ function Router() {
       <Route path="/bundles" component={BundlePage} />
       <Route path="/admin" component={AdminPage} />
       <Route path="/account" component={AccountPage} />
+      <Route path="/login" component={LoginPage} />
+      <Route path="/register" component={RegisterPage} />
       <Route component={NotFound} />
     </Switch>
   );

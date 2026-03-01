@@ -21,10 +21,13 @@ export interface IStorage {
   getReviewsByProduct(productId: number): Promise<Review[]>;
   createReview(review: InsertReview): Promise<Review>;
 
+  getOrder(id: number): Promise<Order | undefined>;
   getOrders(): Promise<Order[]>;
   getOrdersByUserId(userId: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
+  updateOrderPayment(id: number, razorpayPaymentId: string, status: string): Promise<Order | undefined>;
+  setOrderRazorpayOrderId(id: number, razorpayOrderId: string): Promise<Order | undefined>;
 
   getPromotions(): Promise<Promotion[]>;
   createPromotion(promo: InsertPromotion): Promise<Promotion>;
@@ -101,6 +104,11 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
+  async getOrder(id: number): Promise<Order | undefined> {
+    const [order] = await db.select().from(orders).where(eq(orders.id, id));
+    return order;
+  }
+
   async getOrders(): Promise<Order[]> {
     return db.select().from(orders).orderBy(desc(orders.createdAt));
   }
@@ -116,6 +124,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateOrderStatus(id: number, status: string): Promise<Order | undefined> {
     const [updated] = await db.update(orders).set({ status }).where(eq(orders.id, id)).returning();
+    return updated;
+  }
+
+  async updateOrderPayment(id: number, razorpayPaymentId: string, status: string): Promise<Order | undefined> {
+    const [updated] = await db.update(orders).set({ razorpayPaymentId, status }).where(eq(orders.id, id)).returning();
+    return updated;
+  }
+
+  async setOrderRazorpayOrderId(id: number, razorpayOrderId: string): Promise<Order | undefined> {
+    const [updated] = await db.update(orders).set({ razorpayOrderId }).where(eq(orders.id, id)).returning();
     return updated;
   }
 

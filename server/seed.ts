@@ -1,10 +1,14 @@
 import { db } from "./db";
-import { products, productSizes, reviews, promotions } from "@shared/schema";
-import { sql } from "drizzle-orm";
+import { products, productSizes, reviews, promotions, users } from "@shared/schema";
+import { sql, eq } from "drizzle-orm";
+import { authStorage } from "./auth/storage";
 
 export async function seedDatabase() {
   const existingProducts = await db.select().from(products);
-  if (existingProducts.length > 0) return;
+  if (existingProducts.length > 0) {
+    await ensureDemoUser();
+    return;
+  }
 
   console.log("Seeding database with initial data...");
 
@@ -220,5 +224,38 @@ export async function seedDatabase() {
     },
   ]);
 
+  await ensureDemoUser();
+  await ensureAdminUser();
   console.log("Database seeded successfully!");
+}
+
+async function ensureAdminUser() {
+  const adminEmail = "admin@example.com";
+  const [existing] = await db.select().from(users).where(eq(users.email, adminEmail));
+  if (existing) {
+    if (!existing.isAdmin) {
+      await db.update(users).set({ isAdmin: true }).where(eq(users.id, existing.id));
+    }
+    return;
+  }
+  const user = await authStorage.createUser({
+    email: adminEmail,
+    password: "admin123",
+    firstName: "Admin",
+    lastName: "User",
+  });
+  await db.update(users).set({ isAdmin: true }).where(eq(users.id, user.id));
+}
+
+async function ensureDemoUser() {
+  const [existing] = await db.select().from(users).where(eq(users.id, "demo"));
+  if (existing) return;
+  await db.insert(users).values({
+    id: "demo",
+    email: "demo@example.com",
+    firstName: "Demo",
+    lastName: "User",
+    provider: "email",
+    isAdmin: true,
+  });
 }

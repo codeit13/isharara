@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Package, ShoppingCart, Tag, Users, Plus, Pencil, Trash2, Eye, ChevronDown, BarChart3 } from "lucide-react";
+import { Package, ShoppingCart, Tag, Users, Plus, Pencil, Trash2, Eye, BarChart3, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,9 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
+import { Link } from "wouter";
+import AdminLoginPage from "@/pages/AdminLoginPage";
 import type { ProductWithSizes, Order, Promotion, Subscriber } from "@shared/schema";
 
 function DashboardStats({ products, orders }: { products: ProductWithSizes[]; orders: Order[] }) {
@@ -479,10 +482,51 @@ function SubscribersTab({ subscribers }: { subscribers: Subscriber[] }) {
 }
 
 export default function AdminPage() {
+  const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const { data: products, isLoading: prodLoading } = useQuery<ProductWithSizes[]>({ queryKey: ["/api/products"] });
-  const { data: orders, isLoading: ordLoading } = useQuery<Order[]>({ queryKey: ["/api/admin/orders"] });
+  const { data: orders, isLoading: ordLoading } = useQuery<Order[]>({
+    queryKey: ["/api/admin/orders"],
+    enabled: !!user?.isAdmin,
+  });
   const { data: promotions, isLoading: promoLoading } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
-  const { data: subscribers, isLoading: subLoading } = useQuery<Subscriber[]>({ queryKey: ["/api/admin/subscribers"] });
+  const { data: subscribers, isLoading: subLoading } = useQuery<Subscriber[]>({
+    queryKey: ["/api/admin/subscribers"],
+    enabled: !!user?.isAdmin,
+  });
+
+  if (authLoading) {
+    return (
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        <Skeleton className="h-8 w-48 mb-6" />
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 rounded-md" />)}
+        </div>
+        <Skeleton className="h-96 rounded-md" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <AdminLoginPage />;
+  }
+
+  if (!user?.isAdmin) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center" data-testid="admin-access-denied">
+        <ShieldAlert className="w-12 h-12 mx-auto text-destructive mb-4" />
+        <h1 className="text-xl font-semibold mb-2">Access denied</h1>
+        <p className="text-muted-foreground text-sm mb-6">You need admin privileges to view this page.</p>
+        <div className="flex gap-3 justify-center">
+          <Link href="/">
+            <Button variant="outline">Back to store</Button>
+          </Link>
+          <Button variant="destructive" onClick={() => { window.location.href = "/api/logout"; }}>
+            Log out
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const isLoading = prodLoading || ordLoading || promoLoading || subLoading;
 

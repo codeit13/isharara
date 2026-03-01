@@ -16,7 +16,7 @@ export default function SubscribePopup() {
   useEffect(() => {
     const dismissed = sessionStorage.getItem("ishqara_popup_dismissed");
     if (!dismissed) {
-      const timer = setTimeout(() => setOpen(true), 5000);
+      const timer = setTimeout(() => setOpen(true), 3001);
       return () => clearTimeout(timer);
     }
   }, []);

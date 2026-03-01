@@ -25,7 +25,7 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      window.location.href = "/api/login";
+      setLocation("/login");
     }
   }, [authLoading, isAuthenticated]);
 
@@ -63,7 +63,9 @@ export default function AccountPage() {
             <h1 className="text-2xl font-serif font-bold" data-testid="text-account-name">
               {user?.firstName} {user?.lastName}
             </h1>
-            <p className="text-muted-foreground text-sm" data-testid="text-account-email">{user?.email}</p>
+            <p className="text-muted-foreground text-sm" data-testid="text-account-email">
+              {user?.email || user?.phone || "Signed in with WhatsApp"}
+            </p>
           </div>
           <Button
             variant="outline"
