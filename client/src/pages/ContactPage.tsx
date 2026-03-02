@@ -1,6 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSettings } from "@/hooks/use-settings";
 
 export default function ContactPage() {
+  const { storeEmail, storePhone } = useSettings();
+
+  // Build a wa.me link from the phone number (strip non-digits)
+  const waPhone = storePhone.replace(/\D/g, "");
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-10" data-testid="page-contact">
       <Card className="border-0 shadow-sm">
@@ -16,15 +22,19 @@ export default function ContactPage() {
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Phone / WhatsApp</p>
             <p>
-              <a href="https://wa.me/919867902305" className="text-primary underline underline-offset-2">
-                +91 98679 02305
+              <a href={`https://wa.me/${waPhone}`} className="text-primary underline underline-offset-2">
+                {storePhone}
               </a>
             </p>
           </div>
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Email</p>
-            <p>ishqaraperfumes@gmail.com</p>
+            <p>
+              <a href={`mailto:${storeEmail}`} className="text-primary underline underline-offset-2">
+                {storeEmail}
+              </a>
+            </p>
           </div>
 
           <div className="space-y-1">

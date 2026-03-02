@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, Plus, ExternalLink } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, Plus, ExternalLink, ShoppingBag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +22,11 @@ export default function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { shippingFee, freeShippingThreshold, upiId: settingsUpiId, upiBusinessName: settingsUpiName } = useSettings();
+  const {
+    shippingFee, freeShippingThreshold,
+    upiId: settingsUpiId, upiBusinessName: settingsUpiName,
+    storeName, codEnabled, minOrderAmount,
+  } = useSettings();
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<number | null>(null);
@@ -140,7 +144,7 @@ export default function CheckoutPage() {
       key: razorpay.keyId,
       amount: razorpay.amount,
       order_id: razorpay.orderId,
-      name: "ISHQARA",
+      name: storeName,
       description: `Order #${order.id}`,
       prefill: {
         name: form.customerName,
@@ -186,6 +190,14 @@ export default function CheckoutPage() {
   const handlePlaceOrder = async () => {
     if (!form.customerName || !form.email || !form.phone || !form.address || !form.city || !form.pincode) {
       toast({ title: "Please fill all delivery details", variant: "destructive" });
+      return;
+    }
+    if (minOrderAmount > 0 && grandTotal < minOrderAmount) {
+      toast({
+        title: `Minimum order amount is Rs. ${minOrderAmount.toLocaleString()}`,
+        description: `Add more items to proceed.`,
+        variant: "destructive",
+      });
       return;
     }
     setIsSubmitting(true);
@@ -236,6 +248,7 @@ export default function CheckoutPage() {
   };
 
   const isFormValid = form.customerName && form.email && form.phone && form.address && form.city && form.pincode;
+  const isBelowMinOrder = minOrderAmount > 0 && grandTotal < minOrderAmount;
 
   // UPI pending screen — shown after order is created, waiting for user to complete payment
   if (upiState === "pending" && upiOrderId) {
@@ -526,7 +539,27 @@ export default function CheckoutPage() {
                   <p className="text-xs text-muted-foreground">Credit, Debit, Net Banking (Razorpay)</p>
                 </div>
               </button>
+              {codEnabled && (
+                <button
+                  className={`flex items-center gap-3 p-4 rounded-md border transition-colors text-left ${
+                    paymentMethod === "cod" ? "border-primary bg-primary/5" : "border-border"
+                  }`}
+                  onClick={() => setPaymentMethod("cod")}
+                  data-testid="button-payment-cod"
+                >
+                  <ShoppingBag className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Cash on Delivery</p>
+                    <p className="text-xs text-muted-foreground">Pay when your order arrives</p>
+                  </div>
+                </button>
+              )}
             </div>
+            {minOrderAmount > 0 && grandTotal < minOrderAmount && (
+              <p className="mt-3 text-xs text-destructive bg-destructive/10 rounded-md px-3 py-2">
+                Minimum order amount is Rs. {minOrderAmount.toLocaleString()}. Add Rs. {(minOrderAmount - grandTotal).toLocaleString()} more to place your order.
+              </p>
+            )}
           </div>
         </div>
 
@@ -586,7 +619,7 @@ export default function CheckoutPage() {
             )}
             <Button
               className="w-full mt-4"
-              disabled={!isFormValid || isSubmitting}
+              disabled={!isFormValid || isSubmitting || isBelowMinOrder}
               onClick={handlePlaceOrder}
               data-testid="button-place-order"
             >
@@ -607,7 +640,7 @@ export default function CheckoutPage() {
         </div>
         <Button
           className="flex-1 max-w-[200px]"
-          disabled={!isFormValid || isSubmitting}
+          disabled={!isFormValid || isSubmitting || isBelowMinOrder}
           onClick={handlePlaceOrder}
           data-testid="button-place-order-mobile"
         >
