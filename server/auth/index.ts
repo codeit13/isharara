@@ -305,9 +305,8 @@ export async function setupAuth(app: Express): Promise<void> {
   });
 
   // ----- WhatsApp / Phone OTP -----
-  function generateOtp(): string {
-    return String(Math.floor(100000 + Math.random() * 900000));
-  }
+  // Dummy OTP: always 123456. Replace with a real WhatsApp/SMS provider when ready.
+  const DUMMY_OTP = "123456";
 
   app.post("/api/auth/whatsapp/send-otp", async (req, res) => {
     try {
@@ -317,16 +316,8 @@ export async function setupAuth(app: Express): Promise<void> {
         return res.status(400).json({ message: "Valid phone number is required" });
       }
       const phoneNum = raw.length > 10 ? raw : `91${raw}`;
-      const otp = generateOtp();
-      await authStorage.setOtp(phoneNum, otp);
-      // In production: send OTP via WhatsApp Business API or SMS (e.g. Twilio).
-      // For development we return the OTP so the client can show it or user can paste it.
-      const isDev = process.env.NODE_ENV !== "production";
-      res.json({
-        sent: true,
-        expiresIn: 300,
-        ...(isDev && { devOtp: otp }),
-      });
+      await authStorage.setOtp(phoneNum, DUMMY_OTP);
+      res.json({ sent: true, expiresIn: 300 });
     } catch (e: any) {
       console.error("Send OTP error:", e);
       res.status(500).json({ message: e.message || "Failed to send OTP" });

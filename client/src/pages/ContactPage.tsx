@@ -14,6 +14,15 @@ export default function ContactPage() {
           </p>
 
           <div className="space-y-1">
+            <p className="font-semibold text-foreground">Phone / WhatsApp</p>
+            <p>
+              <a href="https://wa.me/919867902305" className="text-primary underline underline-offset-2">
+                +91 98679 02305
+              </a>
+            </p>
+          </div>
+
+          <div className="space-y-1">
             <p className="font-semibold text-foreground">Email</p>
             <p>support@ishqara.com</p>
           </div>

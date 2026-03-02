@@ -31,7 +31,6 @@ export default function LoginPage() {
   const [otpValue, setOtpValue] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
-  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [showWhatsapp, setShowWhatsapp] = useState(false);
 
   const {
@@ -84,8 +83,7 @@ export default function LoginPage() {
         return;
       }
       setOtpSent(true);
-      if (json.devOtp) setDevOtp(json.devOtp);
-      toast({ title: "OTP sent! Check your phone (or use dev OTP below in development)." });
+      toast({ title: "OTP sent! Enter the code you received." });
     } catch {
       toast({ variant: "destructive", title: "Failed to send OTP" });
     } finally {
@@ -271,11 +269,6 @@ export default function LoginPage() {
                             ))}
                           </InputOTPGroup>
                         </InputOTP>
-                        {devOtp && (
-                          <p className="text-xs text-muted-foreground">
-                            Dev OTP: <strong>{devOtp}</strong> (development only)
-                          </p>
-                        )}
                       </div>
                     </div>
                     <Button

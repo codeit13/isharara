@@ -32,6 +32,8 @@ export default function AccountPage() {
   const { data: orders, isLoading: ordersLoading } = useQuery<Order[]>({
     queryKey: ["/api/my-orders"],
     enabled: isAuthenticated,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   if (authLoading) {

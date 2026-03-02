@@ -7,16 +7,16 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-1">
-            <h3 className="font-serif text-xl font-bold tracking-wider mb-3">ISHQARA</h3>
+            <img src="/logo.png" alt="ISHQARA" className="h-12 w-auto object-contain mb-3" />
             <p className="text-sm text-muted-foreground leading-relaxed">
               Premium fragrances crafted for those who believe in treating themselves. 
               Discover your signature scent.
             </p>
             <div className="flex gap-3 mt-4">
-              <a href="#" className="text-muted-foreground transition-colors" aria-label="Instagram">
+              <a href="https://instagram.com/ishqara" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
                 <SiInstagram className="w-5 h-5" />
               </a>
-              <a href="#" className="text-muted-foreground transition-colors" aria-label="WhatsApp">
+              <a href="https://wa.me/919867902305" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="WhatsApp">
                 <SiWhatsapp className="w-5 h-5" />
               </a>
             </div>

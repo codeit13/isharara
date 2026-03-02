@@ -80,9 +80,12 @@ export default function Navbar() {
         </div>
 
         <Link href="/">
-          <span className="font-serif text-xl md:text-2xl font-bold tracking-wider cursor-pointer" data-testid="link-logo">
-            ISHQARA
-          </span>
+          <img
+            src="/logo.png"
+            alt="ISHQARA"
+            className="h-10 md:h-12 w-auto cursor-pointer object-contain"
+            data-testid="link-logo"
+          />
         </Link>
 
         <nav className="hidden md:flex items-center gap-1">
