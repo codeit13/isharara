@@ -59,6 +59,22 @@ export const orders = pgTable("orders", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const addresses = pgTable("addresses", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  label: text("label").notNull().default("Home"),
+  recipientName: text("recipient_name").notNull(),
+  phone: text("phone").notNull(),
+  addressLine1: text("address_line1").notNull(),
+  addressLine2: text("address_line2"),
+  city: text("city").notNull(),
+  state: text("state").notNull().default(""),
+  pincode: text("pincode").notNull(),
+  country: text("country").notNull().default("India"),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const promotions = pgTable("promotions", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
@@ -79,6 +95,7 @@ export const subscribers = pgTable("subscribers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const insertAddressSchema = createInsertSchema(addresses).omit({ id: true, createdAt: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertProductSizeSchema = createInsertSchema(productSizes).omit({ id: true });
 export const insertReviewSchema = createInsertSchema(reviews).omit({ id: true, createdAt: true });
@@ -86,6 +103,8 @@ export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, cre
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true });
 export const insertSubscriberSchema = createInsertSchema(subscribers).omit({ id: true, createdAt: true });
 
+export type Address = typeof addresses.$inferSelect;
+export type InsertAddress = z.infer<typeof insertAddressSchema>;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type ProductSize = typeof productSizes.$inferSelect;

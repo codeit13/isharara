@@ -308,14 +308,31 @@ export async function setupAuth(app: Express): Promise<void> {
   // Dummy OTP: always 123456. Replace with a real WhatsApp/SMS provider when ready.
   const DUMMY_OTP = "123456";
 
+  /**
+   * Normalize any Indian phone input to the canonical 12-digit form: 91XXXXXXXXXX
+   * Handles: 9027293112 / 09027293112 / 919027293112 / +919027293112
+   */
+  function normalizePhone(input: string): string {
+    let d = input.replace(/\D/g, "");
+    // Strip leading 0 (STD format: 09027293112 → 9027293112)
+    if (d.startsWith("0") && d.length === 11) d = d.slice(1);
+    // Strip leading 0 for any length (e.g. 091...)
+    if (d.startsWith("0")) d = d.slice(1);
+    // Already has country code 91 + 10 digits
+    if (d.length === 12 && d.startsWith("91")) return d;
+    // 10-digit number — add 91
+    if (d.length === 10) return `91${d}`;
+    // Fallback: return as stripped digits
+    return d;
+  }
+
   app.post("/api/auth/whatsapp/send-otp", async (req, res) => {
     try {
       const { phone } = req.body || {};
-      const raw = typeof phone === "string" ? phone.replace(/\D/g, "") : "";
-      if (raw.length < 10) {
+      if (typeof phone !== "string" || phone.replace(/\D/g, "").length < 10) {
         return res.status(400).json({ message: "Valid phone number is required" });
       }
-      const phoneNum = raw.length > 10 ? raw : `91${raw}`;
+      const phoneNum = normalizePhone(phone);
       await authStorage.setOtp(phoneNum, DUMMY_OTP);
       res.json({ sent: true, expiresIn: 300 });
     } catch (e: any) {
@@ -327,11 +344,10 @@ export async function setupAuth(app: Express): Promise<void> {
   app.post("/api/auth/whatsapp/verify-otp", async (req, res) => {
     try {
       const { phone, otp } = req.body || {};
-      const raw = typeof phone === "string" ? phone.replace(/\D/g, "") : "";
-      if (raw.length < 10 || !otp || String(otp).length !== 6) {
+      if (typeof phone !== "string" || phone.replace(/\D/g, "").length < 10 || !otp || String(otp).length !== 6) {
         return res.status(400).json({ message: "Phone and 6-digit OTP are required" });
       }
-      const phoneNum = raw.length > 10 ? raw : `91${raw}`;
+      const phoneNum = normalizePhone(phone);
       const valid = await authStorage.getValidOtp(phoneNum);
       if (!valid || valid.otp !== String(otp).trim()) {
         return res.status(401).json({ message: "Invalid or expired OTP" });

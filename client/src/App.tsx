@@ -1,6 +1,7 @@
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { GoogleOAuthProvider, useGoogleOneTapLogin } from "@react-oauth/google";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Navbar from "@/components/Navbar";
@@ -23,6 +24,23 @@ import RefundPolicyPage from "@/pages/RefundPolicyPage";
 import ShippingPolicyPage from "@/pages/ShippingPolicyPage";
 import ContactPage from "@/pages/ContactPage";
 import NotFound from "@/pages/not-found";
+import { useAuth } from "@/hooks/use-auth";
+import { useGoogleAuth } from "@/hooks/use-google-auth";
+
+/** Displays the One Tap prompt on every page when the user is not signed in. */
+function GoogleOneTapPrompt() {
+  const { user, isLoading } = useAuth();
+  const { handleCredential } = useGoogleAuth();
+
+  useGoogleOneTapLogin({
+    onSuccess: (res) => {
+      if (res.credential) handleCredential(res.credential);
+    },
+    disabled: isLoading || !!user,
+  });
+
+  return null;
+}
 
 function Router() {
   return (
@@ -49,19 +67,24 @@ function Router() {
 }
 
 function App() {
+  const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <div className="min-h-screen flex flex-col bg-background">
-          <Navbar />
-          <main className="flex-1">
-            <Router />
-          </main>
-          <Footer />
-        </div>
-        <SubscribePopup />
-        <Toaster />
-      </TooltipProvider>
+      <GoogleOAuthProvider clientId={clientId ?? ""}>
+        <TooltipProvider>
+          <div className="min-h-screen flex flex-col bg-background">
+            <Navbar />
+            <main className="flex-1">
+              <Router />
+            </main>
+            <Footer />
+          </div>
+          {clientId && <GoogleOneTapPrompt />}
+          <SubscribePopup />
+          <Toaster />
+        </TooltipProvider>
+      </GoogleOAuthProvider>
     </QueryClientProvider>
   );
 }

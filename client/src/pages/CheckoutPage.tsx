@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, CreditCard, Banknote, CheckCircle2, X } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, Plus, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,19 +10,26 @@ import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { loadRazorpay } from "@/lib/razorpay";
-import type { Order, Promotion } from "@shared/schema";
+import {
+  buildUpiUrl, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
+} from "@/lib/upi";
+import type { Order, Promotion, Address } from "@shared/schema";
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
-  const [paymentMethod, setPaymentMethod] = useState("cod");
+  const [paymentMethod, setPaymentMethod] = useState("upi");
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [upiState, setUpiState] = useState<"idle" | "pending" | "confirmed">("idle");
+  const [upiOrderId, setUpiOrderId] = useState<number | null>(null);
   const [promoCode, setPromoCode] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<Promotion | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
   const [form, setForm] = useState({
     customerName: "",
     email: "",
@@ -32,18 +39,41 @@ export default function CheckoutPage() {
     pincode: "",
   });
 
+  const { data: promotions } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
+  const { data: addresses } = useQuery<Address[]>({
+    queryKey: ["/api/addresses"],
+    enabled: !!user,
+    staleTime: 0,
+  });
+
+  const applyAddress = (addr: Address) => {
+    setSelectedAddressId(addr.id);
+    setForm((prev) => ({
+      ...prev,
+      customerName: addr.recipientName,
+      phone: addr.phone,
+      address: [addr.addressLine1, addr.addressLine2].filter(Boolean).join(", "),
+      city: addr.city,
+      pincode: addr.pincode,
+    }));
+  };
+
   useEffect(() => {
-    if (user) {
-      setForm((prev) => ({
-        ...prev,
-        customerName: prev.customerName || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
-        email: prev.email || user.email || "",
-      }));
+    if (!user) return;
+    const defaultAddr = addresses?.find((a) => a.isDefault) ?? addresses?.[0];
+    if (defaultAddr) {
+      applyAddress(defaultAddr);
     }
-  }, [user]);
+    setForm((prev) => ({
+      ...prev,
+      email: prev.email || user.email || "",
+      customerName: prev.customerName || `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+      phone: prev.phone || user.phone || "",
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, addresses]);
 
   const shipping = totalPrice >= 1499 ? 0 : 99;
-  const { data: promotions } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
 
   const discountAmount = (() => {
     if (!appliedPromo || !appliedPromo.isActive) return 0;
@@ -173,9 +203,21 @@ export default function CheckoutPage() {
 
       if (data.razorpay) {
         await openRazorpayCheckout(order, data.razorpay);
+      } else if (paymentMethod === "upi") {
+        // Order created; now trigger UPI intent
+        setUpiOrderId(order.id);
+        setUpiState("pending");
+        clearCart();
+        setIsSubmitting(false);
+        // Trigger the intent (device-specific)
+        const upiUrl = buildUpiUrl({ amount: grandTotal, orderId: order.id });
+        const device = detectDevice();
+        if (device === "android" && upiUrl) {
+          triggerAndroidUpi(upiUrl);
+        }
+        // iOS: buttons shown in the UI; desktop: UPI ID shown
       } else {
         handleOrderSuccess(order);
-        toast({ title: "Order placed successfully!" });
         setIsSubmitting(false);
       }
     } catch {
@@ -189,6 +231,90 @@ export default function CheckoutPage() {
   };
 
   const isFormValid = form.customerName && form.email && form.phone && form.address && form.city && form.pincode;
+
+  // UPI pending screen — shown after order is created, waiting for user to complete payment
+  if (upiState === "pending" && upiOrderId) {
+    const upiUrl   = buildUpiUrl({ amount: grandTotal, orderId: upiOrderId });
+    const appUrls  = buildAppUpiUrls({ amount: grandTotal, orderId: upiOrderId });
+    const device   = detectDevice();
+    const upiId    = import.meta.env.VITE_UPI_ID as string | undefined;
+    const bizName  = (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) ?? "ISHQARA";
+
+    return (
+      <div className="max-w-lg mx-auto px-4 py-12 text-center">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+          <Smartphone className="w-8 h-8 text-primary" />
+        </div>
+        <h1 className="font-serif text-2xl font-bold mb-1">Complete your payment</h1>
+        <p className="text-sm text-muted-foreground mb-2">Order #{upiOrderId} · Rs. {grandTotal.toLocaleString()}</p>
+        <p className="text-xs text-muted-foreground mb-6">
+          Pay <strong>Rs. {grandTotal.toLocaleString()}</strong> to <strong>{bizName}</strong>
+        </p>
+
+        {/* Android: one-tap open any UPI app */}
+        {device === "android" && upiUrl && (
+          <a
+            href={upiUrl}
+            className="inline-flex items-center justify-center gap-2 w-full max-w-xs mx-auto h-11 rounded-md bg-primary text-primary-foreground text-sm font-medium mb-3 hover:bg-primary/90"
+          >
+            <Smartphone className="w-4 h-4" /> Open UPI App
+          </a>
+        )}
+
+        {/* iOS: per-app buttons */}
+        {device === "ios" && (
+          <div className="space-y-2 mb-4 max-w-xs mx-auto">
+            <p className="text-xs text-muted-foreground mb-2">Choose your UPI app</p>
+            {appUrls.map((app) => (
+              <a
+                key={app.label}
+                href={app.url}
+                className="flex items-center gap-3 w-full p-3 rounded-md border hover:bg-muted transition-colors text-sm font-medium"
+              >
+                <img src={app.icon} alt={app.label} className="w-6 h-6 object-contain rounded" />
+                {app.label}
+                <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* Desktop: show UPI ID */}
+        {device === "desktop" && upiId && (
+          <div className="mb-4 p-4 rounded-md border bg-muted/50 max-w-xs mx-auto text-left">
+            <p className="text-xs text-muted-foreground mb-1">Pay to UPI ID</p>
+            <p className="font-mono font-bold text-sm select-all">{upiId}</p>
+            <p className="text-xs text-muted-foreground mt-1">Amount: Rs. {grandTotal.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground">Ref: ISHQARA-{upiOrderId}</p>
+          </div>
+        )}
+
+        <Separator className="my-5 max-w-xs mx-auto" />
+        <p className="text-xs text-muted-foreground mb-4">
+          After completing the payment in your UPI app, tap the button below to confirm your order.
+        </p>
+        <Button
+          className="w-full max-w-xs mx-auto"
+          onClick={() => {
+            setUpiState("confirmed");
+            setOrderPlaced(true);
+            setPlacedOrderId(upiOrderId);
+          }}
+        >
+          <CheckCircle2 className="w-4 h-4 mr-2" /> I've completed the payment
+        </Button>
+        <p className="text-xs text-muted-foreground mt-4">
+          Haven't paid yet?{" "}
+          <button
+            className="text-primary underline underline-offset-2"
+            onClick={() => { setUpiState("idle"); setUpiOrderId(null); }}
+          >
+            Go back
+          </button>
+        </p>
+      </div>
+    );
+  }
 
   if (orderPlaced) {
     return (
@@ -237,7 +363,61 @@ export default function CheckoutPage() {
       <div className="grid md:grid-cols-3 gap-8">
         <div className="md:col-span-2 space-y-6">
           <div className="p-5 rounded-md border">
-            <h3 className="font-semibold mb-4">Delivery Details</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Delivery Details</h3>
+              {user && (
+                <Link href="/account">
+                  <button className="flex items-center gap-1 text-xs text-primary hover:underline">
+                    <Plus className="w-3 h-3" /> Manage addresses
+                  </button>
+                </Link>
+              )}
+            </div>
+
+            {/* Saved address picker */}
+            {user && addresses && addresses.length > 0 && (
+              <div className="mb-5">
+                <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" /> Saved addresses
+                </p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {addresses.map((addr) => (
+                    <button
+                      key={addr.id}
+                      type="button"
+                      onClick={() => { applyAddress(addr); setShowManualForm(false); }}
+                      className={`text-left p-3 rounded-md border text-sm transition-colors w-full ${
+                        selectedAddressId === addr.id && !showManualForm
+                          ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                          : "border-border hover:border-primary/50 hover:bg-muted/50"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-medium text-xs">{addr.label}</span>
+                        {addr.isDefault && (
+                          <span className="text-[10px] text-primary font-medium">Default</span>
+                        )}
+                      </div>
+                      <p className="font-medium leading-snug">{addr.recipientName}</p>
+                      <p className="text-muted-foreground text-xs leading-snug truncate">
+                        {addr.addressLine1}{addr.addressLine2 ? `, ${addr.addressLine2}` : ""}
+                      </p>
+                      <p className="text-muted-foreground text-xs">{addr.city} — {addr.pincode}</p>
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowManualForm((v) => !v)}
+                  className="mt-3 text-xs text-primary hover:underline w-full text-center"
+                >
+                  {showManualForm ? "↑ Hide manual form" : "✎ Enter / edit address manually"}
+                </button>
+              </div>
+            )}
+
+            {/* Manual form — always visible when no saved addresses, toggled otherwise */}
+            {(!(user && addresses && addresses.length > 0) || showManualForm) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs">Full Name</Label>
@@ -264,6 +444,7 @@ export default function CheckoutPage() {
                 <Input value={form.pincode} onChange={handleChange("pincode")} placeholder="PIN code" data-testid="input-pincode" />
               </div>
             </div>
+            )}
           </div>
 
           <div className="p-5 rounded-md border">
@@ -271,15 +452,15 @@ export default function CheckoutPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 className={`flex items-center gap-3 p-4 rounded-md border transition-colors text-left ${
-                  paymentMethod === "cod" ? "border-primary bg-primary/5" : "border-border"
+                  paymentMethod === "upi" ? "border-primary bg-primary/5" : "border-border"
                 }`}
-                onClick={() => setPaymentMethod("cod")}
-                data-testid="button-payment-cod"
+                onClick={() => setPaymentMethod("upi")}
+                data-testid="button-payment-upi"
               >
-                <Banknote className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                <Smartphone className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium">Cash on Delivery</p>
-                  <p className="text-xs text-muted-foreground">Pay when you receive</p>
+                  <p className="text-sm font-medium">Pay via UPI App</p>
+                  <p className="text-xs text-muted-foreground">PhonePe, GPay, Paytm, BHIM</p>
                 </div>
               </button>
               <button
@@ -291,8 +472,8 @@ export default function CheckoutPage() {
               >
                 <CreditCard className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium">Pay Online</p>
-                  <p className="text-xs text-muted-foreground">UPI, Card, Net Banking (Razorpay)</p>
+                  <p className="text-sm font-medium">Card / Net Banking</p>
+                  <p className="text-xs text-muted-foreground">Credit, Debit, Net Banking (Razorpay)</p>
                 </div>
               </button>
             </div>

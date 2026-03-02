@@ -5,8 +5,9 @@ import {
   type Order, type InsertOrder,
   type Promotion, type InsertPromotion,
   type Subscriber, type InsertSubscriber,
+  type Address, type InsertAddress,
   type ProductWithSizes,
-  products, productSizes, reviews, orders, promotions, subscribers,
+  products, productSizes, reviews, orders, promotions, subscribers, addresses,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, isNull } from "drizzle-orm";
@@ -36,6 +37,13 @@ export interface IStorage {
 
   getSubscribers(): Promise<Subscriber[]>;
   createSubscriber(sub: InsertSubscriber): Promise<Subscriber>;
+
+  getAddressesByUserId(userId: string): Promise<Address[]>;
+  getAddress(id: number, userId: string): Promise<Address | undefined>;
+  createAddress(data: InsertAddress): Promise<Address>;
+  updateAddress(id: number, userId: string, data: Partial<InsertAddress>): Promise<Address | undefined>;
+  deleteAddress(id: number, userId: string): Promise<{ deleted: boolean; reason?: string }>;
+  setDefaultAddress(id: number, userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -181,6 +189,55 @@ export class DatabaseStorage implements IStorage {
   async createSubscriber(sub: InsertSubscriber): Promise<Subscriber> {
     const [created] = await db.insert(subscribers).values(sub).returning();
     return created;
+  }
+
+  async getAddressesByUserId(userId: string): Promise<Address[]> {
+    return db.select().from(addresses).where(eq(addresses.userId, userId)).orderBy(desc(addresses.isDefault), desc(addresses.createdAt));
+  }
+
+  async getAddress(id: number, userId: string): Promise<Address | undefined> {
+    const [addr] = await db.select().from(addresses).where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
+    return addr;
+  }
+
+  async createAddress(data: InsertAddress): Promise<Address> {
+    const existing = await this.getAddressesByUserId(data.userId);
+    // First address is always default
+    const isDefault = existing.length === 0 ? true : !!data.isDefault;
+    if (isDefault) {
+      await db.update(addresses).set({ isDefault: false }).where(eq(addresses.userId, data.userId));
+    }
+    const [created] = await db.insert(addresses).values({ ...data, isDefault }).returning();
+    return created;
+  }
+
+  async updateAddress(id: number, userId: string, data: Partial<InsertAddress>): Promise<Address | undefined> {
+    if (data.isDefault) {
+      await db.update(addresses).set({ isDefault: false }).where(eq(addresses.userId, userId));
+    }
+    const [updated] = await db.update(addresses).set(data).where(and(eq(addresses.id, id), eq(addresses.userId, userId))).returning();
+    return updated;
+  }
+
+  async deleteAddress(id: number, userId: string): Promise<{ deleted: boolean; reason?: string }> {
+    const all = await this.getAddressesByUserId(userId);
+    if (all.length <= 1) return { deleted: false, reason: "Cannot delete the only address" };
+    const target = all.find((a) => a.id === id);
+    if (!target) return { deleted: false, reason: "Address not found" };
+    await db.delete(addresses).where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
+    // If we deleted the default, promote the next one
+    if (target.isDefault) {
+      const remaining = all.filter((a) => a.id !== id);
+      if (remaining.length > 0) {
+        await db.update(addresses).set({ isDefault: true }).where(eq(addresses.id, remaining[0].id));
+      }
+    }
+    return { deleted: true };
+  }
+
+  async setDefaultAddress(id: number, userId: string): Promise<void> {
+    await db.update(addresses).set({ isDefault: false }).where(eq(addresses.userId, userId));
+    await db.update(addresses).set({ isDefault: true }).where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
   }
 }
 

@@ -65,7 +65,7 @@ export default function PrivacyPolicyPage() {
           <h2 className="font-semibold text-base text-foreground mt-4">6. Contact us</h2>
           <p>
             If you have any questions about this Privacy Policy or how we handle your data, please
-            email us at <span className="font-medium text-foreground">support@ishqara.com</span>.
+            email us at <span className="font-medium text-foreground">ishqaraperfumes@gmail.com</span>.
           </p>
 
           <p className="text-xs mt-6">Last updated: {new Date().getFullYear()}</p>

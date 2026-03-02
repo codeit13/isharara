@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { isAuthenticated, requireAdmin, optionalAuth } from "./auth";
+import { authStorage, normalizePhone } from "./auth/storage";
 import {
   isRazorpayConfigured,
   getRazorpayKeyId,
@@ -73,12 +74,50 @@ export async function registerRoutes(
         subtotal: z.number().min(0),
         discount: z.number().min(0),
         total: z.number().min(0),
-        paymentMethod: z.enum(["cod", "razorpay"]),
+        paymentMethod: z.enum(["upi", "razorpay"]),
       });
       const data = orderSchema.parse(req.body);
       const user = (req as any).user;
       const userId = user?.id || null;
       const order = await storage.createOrder({ ...data, userId });
+
+      // Auto-link phone/email to user account on first use
+      if (user) {
+        const normalizedPhone = normalizePhone(data.phone);
+        if (!user.phone && normalizedPhone.length >= 10) {
+          await authStorage.linkPhone(user.id, normalizedPhone).catch(() => {});
+        }
+        if (!user.email && data.email) {
+          await authStorage.linkEmail(user.id, data.email).catch(() => {});
+        }
+
+        // Auto-save address if not already stored for this user
+        try {
+          const existingAddrs = await storage.getAddressesByUserId(user.id);
+          const alreadySaved = existingAddrs.some(
+            (a) =>
+              a.addressLine1.toLowerCase() === data.address.toLowerCase() &&
+              a.pincode === data.pincode
+          );
+          if (!alreadySaved) {
+            await storage.createAddress({
+              userId: user.id,
+              label: "Home",
+              recipientName: data.customerName,
+              phone: normalizedPhone,
+              addressLine1: data.address,
+              addressLine2: null,
+              city: data.city,
+              state: "",
+              pincode: data.pincode,
+              country: "India",
+              isDefault: existingAddrs.length === 0,
+            });
+          }
+        } catch {
+          // Non-fatal: address saving failure should not block order
+        }
+      }
 
       if (data.paymentMethod === "razorpay") {
         if (!isRazorpayConfigured()) {
@@ -260,6 +299,57 @@ export async function registerRoutes(
   app.get("/api/admin/subscribers", isAuthenticated, requireAdmin, async (_req, res) => {
     const subs = await storage.getSubscribers();
     res.json(subs);
+  });
+
+  // ---- Address management ----
+  const addressSchema = z.object({
+    label: z.string().min(1).default("Home"),
+    recipientName: z.string().min(1),
+    phone: z.string().min(10),
+    addressLine1: z.string().min(1),
+    addressLine2: z.string().optional().nullable(),
+    city: z.string().min(1),
+    state: z.string().default(""),
+    pincode: z.string().min(6),
+    country: z.string().default("India"),
+    isDefault: z.boolean().optional().default(false),
+  });
+
+  app.get("/api/addresses", isAuthenticated, async (req: any, res) => {
+    const addrs = await storage.getAddressesByUserId(req.user.id);
+    res.json(addrs);
+  });
+
+  app.post("/api/addresses", isAuthenticated, async (req: any, res) => {
+    try {
+      const data = addressSchema.parse(req.body);
+      const addr = await storage.createAddress({ ...data, userId: req.user.id, addressLine2: data.addressLine2 ?? null });
+      res.json(addr);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/addresses/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const data = addressSchema.partial().parse(req.body);
+      const updated = await storage.updateAddress(Number(req.params.id), req.user.id, data);
+      if (!updated) return res.status(404).json({ message: "Address not found" });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.delete("/api/addresses/:id", isAuthenticated, async (req: any, res) => {
+    const result = await storage.deleteAddress(Number(req.params.id), req.user.id);
+    if (!result.deleted) return res.status(400).json({ message: result.reason });
+    res.json({ success: true });
+  });
+
+  app.patch("/api/addresses/:id/default", isAuthenticated, async (req: any, res) => {
+    await storage.setDefaultAddress(Number(req.params.id), req.user.id);
+    res.json({ success: true });
   });
 
   return httpServer;

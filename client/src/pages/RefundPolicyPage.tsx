@@ -50,7 +50,7 @@ export default function RefundPolicyPage() {
           <h2 className="font-semibold text-base text-foreground mt-4">4. How to raise a request</h2>
           <p>
             To report an issue, please email us at
-            <span className="font-medium text-foreground"> support@ishqara.com</span> with your
+            <span className="font-medium text-foreground"> ishqaraperfumes@gmail.com</span> with your
             order ID, description of the issue, and clear photos/videos of the product and packaging.
           </p>
 

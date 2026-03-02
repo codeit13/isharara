@@ -67,7 +67,7 @@ export default function TermsPage() {
           <h2 className="font-semibold text-base text-foreground mt-4">7. Contact</h2>
           <p>
             For any questions about these Terms, please write to us at
-            <span className="font-medium text-foreground"> support@ishqara.com</span>.
+            <span className="font-medium text-foreground"> ishqaraperfumes@gmail.com</span>.
           </p>
 
           <p className="text-xs mt-6">Last updated: {new Date().getFullYear()}</p>

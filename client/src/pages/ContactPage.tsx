@@ -24,7 +24,7 @@ export default function ContactPage() {
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Email</p>
-            <p>support@ishqara.com</p>
+            <p>ishqaraperfumes@gmail.com</p>
           </div>
 
           <div className="space-y-1">
