@@ -9,7 +9,7 @@ import {
   products, productSizes, reviews, orders, promotions, subscribers,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getProducts(): Promise<ProductWithSizes[]>;
@@ -24,6 +24,7 @@ export interface IStorage {
   getOrder(id: number): Promise<Order | undefined>;
   getOrders(): Promise<Order[]>;
   getOrdersByUserId(userId: string): Promise<Order[]>;
+  getOrdersByUserIdOrEmail(userId: string, email: string): Promise<Order[]>;
   createOrder(order: InsertOrder): Promise<Order>;
   updateOrderStatus(id: number, status: string): Promise<Order | undefined>;
   updateOrderPayment(id: number, razorpayPaymentId: string, status: string): Promise<Order | undefined>;
@@ -115,6 +116,28 @@ export class DatabaseStorage implements IStorage {
 
   async getOrdersByUserId(userId: string): Promise<Order[]> {
     return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
+  }
+
+  /** Orders for this user by userId, or by email when userId is null (guest/legacy orders). */
+  async getOrdersByUserIdOrEmail(userId: string, email: string): Promise<Order[]> {
+    const byUser = await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
+    const byEmail = email
+      ? await db
+          .select()
+          .from(orders)
+          .where(and(isNull(orders.userId), sql`lower(${orders.email}) = lower(${email})`))
+          .orderBy(desc(orders.createdAt))
+      : [];
+    const seen = new Set(byUser.map((o) => o.id));
+    const combined = [...byUser];
+    for (const o of byEmail) {
+      if (!seen.has(o.id)) {
+        seen.add(o.id);
+        combined.push(o);
+      }
+    }
+    combined.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return combined;
   }
 
   async createOrder(order: InsertOrder): Promise<Order> {

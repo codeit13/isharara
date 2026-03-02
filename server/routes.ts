@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { isAuthenticated, requireAdmin } from "./auth";
+import { isAuthenticated, requireAdmin, optionalAuth } from "./auth";
 import {
   isRazorpayConfigured,
   getRazorpayKeyId,
@@ -54,7 +54,7 @@ export async function registerRoutes(
     res.json(promos);
   });
 
-  app.post("/api/orders", async (req, res) => {
+  app.post("/api/orders", optionalAuth, async (req, res) => {
     try {
       const orderSchema = z.object({
         customerName: z.string().min(1),
@@ -145,7 +145,8 @@ export async function registerRoutes(
   app.get("/api/my-orders", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-      const userOrders = await storage.getOrdersByUserId(userId);
+      const email = req.user.email || "";
+      const userOrders = await storage.getOrdersByUserIdOrEmail(userId, email);
       res.json(userOrders);
     } catch (e: any) {
       res.status(500).json({ message: e.message });

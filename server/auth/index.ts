@@ -1,4 +1,4 @@
-import type { Express, RequestHandler } from "express";
+import type { Express, RequestHandler, Request } from "express";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import passport from "passport";
@@ -89,7 +89,14 @@ export async function setupAuth(app: Express): Promise<void> {
   // ----- Passport: Google OAuth -----
   const googleClientID = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const baseUrl = process.env.BASE_URL || "http://localhost:3001";
+
+  /** Build base URL from request so redirect_uri works in prod (no hardcoded localhost). */
+  function getBaseUrlFromRequest(req: Request): string {
+    if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/$/, "");
+    const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+    const host = req.get("x-forwarded-host") || req.get("host") || "localhost:3001";
+    return `${protocol}://${host}`;
+  }
 
   if (googleClientID && googleClientSecret) {
     passport.use(
@@ -97,7 +104,10 @@ export async function setupAuth(app: Express): Promise<void> {
         {
           clientID: googleClientID,
           clientSecret: googleClientSecret,
-          callbackURL: `${baseUrl}/api/auth/google/callback`,
+          // callbackURL is overridden per-request in the route so prod uses correct host
+          callbackURL: process.env.BASE_URL
+            ? `${process.env.BASE_URL.replace(/\/$/, "")}/api/auth/google/callback`
+            : "http://localhost:3001/api/auth/google/callback",
         },
         async (_accessToken: string, _refreshToken: string, profile: Profile, done: (err: unknown, user?: User) => void) => {
           try {
@@ -184,7 +194,9 @@ export async function setupAuth(app: Express): Promise<void> {
     if (!googleClientID || !googleClientSecret) {
       return res.status(503).json({ message: "Google login is not configured" });
     }
-    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+    const baseUrl = getBaseUrlFromRequest(req);
+    const callbackURL = `${baseUrl}/api/auth/google/callback`;
+    passport.authenticate("google", { scope: ["profile", "email"], callbackURL } as passport.AuthenticateOptions)(req, res, next);
   });
 
   app.get("/api/auth/google/callback", (req, res, next) => {
@@ -309,6 +321,15 @@ export const isAuthenticated: RequestHandler = async (req, res, next) => {
     return res.status(401).json({ message: "Unauthorized" });
   }
   req.user = user;
+  next();
+};
+
+/** Sets req.user from session when present; does not 401 when not logged in. Use for routes that optionally attach user (e.g. order creation). */
+export const optionalAuth: RequestHandler = async (req, res, next) => {
+  const userId = (req.session as any)?.userId;
+  if (!userId) return next();
+  const user = await authStorage.getUser(userId);
+  if (user) req.user = user;
   next();
 };
 
