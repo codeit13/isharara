@@ -438,6 +438,55 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // ── SEO ─────────────────────────────────────────────────────────────────────
+  // Dynamic sitemap — includes all product pages
+  app.get("/sitemap.xml", async (_req, res) => {
+    try {
+      const products = await storage.getProducts();
+      const BASE = "https://ishqara.com";
+      const staticRoutes = [
+        { loc: "/",               changefreq: "weekly",  priority: "1.0" },
+        { loc: "/shop",           changefreq: "daily",   priority: "0.9" },
+        { loc: "/deals",          changefreq: "daily",   priority: "0.8" },
+        { loc: "/bundles",        changefreq: "weekly",  priority: "0.7" },
+        { loc: "/contact",        changefreq: "monthly", priority: "0.5" },
+        { loc: "/privacy-policy", changefreq: "yearly",  priority: "0.3" },
+        { loc: "/terms",          changefreq: "yearly",  priority: "0.3" },
+        { loc: "/refund-policy",  changefreq: "yearly",  priority: "0.3" },
+        { loc: "/shipping-policy",changefreq: "yearly",  priority: "0.3" },
+      ];
+
+      const now = new Date().toISOString().split("T")[0];
+
+      const urlTags = [
+        ...staticRoutes.map(({ loc, changefreq, priority }) => `
+  <url>
+    <loc>${BASE}${loc}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>${changefreq}</changefreq>
+    <priority>${priority}</priority>
+  </url>`),
+        ...products.map((p) => `
+  <url>
+    <loc>${BASE}/product/${p.id}</loc>
+    <lastmod>${now}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`),
+      ].join("");
+
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urlTags}
+</urlset>`;
+
+      res.setHeader("Content-Type", "application/xml");
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.send(xml);
+    } catch (e: any) {
+      res.status(500).send("Failed to generate sitemap");
+    }
+  });
+
   // ── Settings ────────────────────────────────────────────────────────────────
   // Public read: frontend needs shipping fee, store name, UPI config, etc.
   app.get("/api/settings", async (_req, res) => {

@@ -1,0 +1,21 @@
+{
+  "name": "ISHQARA - Premium Fragrances",
+  "short_name": "ISHQARA",
+  "description": "Discover luxury perfumes, gift bundles, and exclusive deals at ISHQARA.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#c0394b",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

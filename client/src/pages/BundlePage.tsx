@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Gift, Check, ShoppingBag, Plus, X } from "lucide-react";
+import SEOHead from "@/components/SEOHead";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -71,6 +72,11 @@ export default function BundlePage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8" data-testid="page-bundles">
+      <SEOHead
+        title="Build Your Own Fragrance Bundle"
+        description="Create your perfect fragrance bundle at ISHQARA. Mix and match luxury perfumes, save more when you buy together. Perfect as a gift."
+        canonicalPath="/bundles"
+      />
       <div className="text-center mb-8">
         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
           <Gift className="w-6 h-6 text-primary" />

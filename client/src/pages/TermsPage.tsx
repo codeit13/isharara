@@ -1,11 +1,13 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import SEOHead from "@/components/SEOHead";
 
 export default function TermsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10" data-testid="page-terms">
+      <SEOHead title="Terms & Conditions" description="Read ISHQARA's Terms and Conditions. Understand the rules for using our website and purchasing our products." canonicalPath="/terms" />
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle className="font-serif text-2xl">Terms &amp; Conditions</CardTitle>
+          <h1 className="font-serif text-2xl font-bold">Terms &amp; Conditions</h1>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p>

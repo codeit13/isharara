@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Private / transactional pages — do not index
+Disallow: /admin
+Disallow: /account
+Disallow: /cart
+Disallow: /checkout
+Disallow: /login
+Disallow: /register
+
+# Sitemap
+Sitemap: https://ishqara.com/sitemap.xml

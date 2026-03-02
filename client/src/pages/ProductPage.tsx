@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
+import SEOHead from "@/components/SEOHead";
 import { Star, ShoppingBag, Minus, Plus, ArrowLeft, Truck, RotateCcw, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -118,8 +119,71 @@ export default function ProductPage() {
     setQuantity(1);
   };
 
+  const lowestPrice = product.sizes.length > 0 ? Math.min(...product.sizes.map((s) => s.price)) : 0;
+  const highestPrice = product.sizes.length > 0 ? Math.max(...product.sizes.map((s) => s.price)) : 0;
+  const isInStock = product.sizes.some((s) => s.stock > 0);
+  const productImage = product.image.startsWith("http") ? product.image : `https://ishqara.com${product.image}`;
+
+  const productSchema = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": product.name,
+    "description": product.description,
+    "image": productImage,
+    "brand": { "@type": "Brand", "name": product.brand || "ISHQARA" },
+    "category": product.category,
+    ...(Number(product.avgRating) > 0 && {
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": Number(product.avgRating).toFixed(1),
+        "reviewCount": product.reviewCount,
+        "bestRating": "5",
+        "worstRating": "1",
+      },
+    }),
+    "offers": product.sizes.length === 1
+      ? {
+          "@type": "Offer",
+          "priceCurrency": "INR",
+          "price": product.sizes[0].price,
+          "availability": product.sizes[0].stock > 0
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+          "url": `https://ishqara.com/product/${product.id}`,
+          "seller": { "@type": "Organization", "name": "ISHQARA" },
+        }
+      : {
+          "@type": "AggregateOffer",
+          "priceCurrency": "INR",
+          "lowPrice": lowestPrice,
+          "highPrice": highestPrice,
+          "offerCount": product.sizes.length,
+          "availability": isInStock
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+        },
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://ishqara.com" },
+      { "@type": "ListItem", "position": 2, "name": "Shop", "item": "https://ishqara.com/shop" },
+      { "@type": "ListItem", "position": 3, "name": product.name, "item": `https://ishqara.com/product/${product.id}` },
+    ],
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 md:py-8" data-testid="page-product">
+      <SEOHead
+        title={`${product.name} — ${product.category} Perfume`}
+        description={`${product.description.slice(0, 155)}…`}
+        canonicalPath={`/product/${product.id}`}
+        image={productImage}
+        type="product"
+        jsonLd={[productSchema, breadcrumbSchema]}
+      />
       <Link href="/shop">
         <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Shop

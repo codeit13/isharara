@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import SEOHead from "@/components/SEOHead";
 import { useLocation } from "wouter";
 import {
   Package, Clock, CheckCircle2, Truck, XCircle,
@@ -386,6 +387,7 @@ export default function AccountPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8" data-testid="page-account">
+      <SEOHead title="My Account" description="Manage your ISHQARA account, orders, and addresses." noIndex />
       {/* Profile card */}
       <Card className="border-0 shadow-sm bg-gradient-to-r from-primary/5 to-primary/10">
         <CardContent className="p-4 sm:p-6 flex flex-wrap items-center gap-4">

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import SEOHead from "@/components/SEOHead";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -95,6 +96,11 @@ export default function ShopPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8" data-testid="page-shop">
+      <SEOHead
+        title="Shop Perfumes — Browse All Fragrances"
+        description="Browse ISHQARA's full collection of luxury fragrances. Filter by scent family, gender, and product type. Authentic OG & recreation perfumes."
+        canonicalPath="/shop"
+      />
 
       {/* Header row */}
       <div className="flex items-end justify-between gap-4 mb-6">

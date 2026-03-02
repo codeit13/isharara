@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/ProductCard";
+import SEOHead from "@/components/SEOHead";
 import type { ProductWithSizes, Promotion } from "@shared/schema";
 
 function HeroSection() {
@@ -198,8 +199,41 @@ export default function HomePage() {
   const trending = (allProducts || []).filter((p) => p.isTrending).slice(0, 4);
   const newArrivals = (allProducts || []).filter((p) => p.isNewArrival).slice(0, 4);
 
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "ISHQARA",
+    "url": "https://ishqara.com",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://ishqara.com/shop?search={search_term_string}",
+      "query-input": "required name=search_term_string",
+    },
+  };
+
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ISHQARA",
+    "url": "https://ishqara.com",
+    "logo": "https://ishqara.com/logo.png",
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "telephone": "+91-98679-02305",
+      "contactType": "customer service",
+      "availableLanguage": ["English", "Hindi"],
+    },
+    "sameAs": ["https://www.instagram.com/ishqaraperfumes"],
+  };
+
   return (
     <div>
+      <SEOHead
+        title="Premium Fragrances — Treat Yourself"
+        description="Discover luxury perfumes at ISHQARA. Shop authentic OG scents and recreation fragrances, gift bundles, and exclusive deals. Free shipping above Rs. 1499."
+        canonicalPath="/"
+        jsonLd={[websiteSchema, orgSchema]}
+      />
       <PromoBanner />
       <HeroSection />
 

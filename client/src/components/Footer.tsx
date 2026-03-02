@@ -13,7 +13,7 @@ export default function Footer() {
               Discover your signature scent.
             </p>
             <div className="flex gap-3 mt-4">
-              <a href="https://instagram.com/ishqara" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
+              <a href="https://www.instagram.com/ishqaraperfumes" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
                 <SiInstagram className="w-5 h-5" />
               </a>
               <a href="https://wa.me/919867902305" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="WhatsApp">

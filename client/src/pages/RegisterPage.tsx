@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import SEOHead from "@/components/SEOHead";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -75,6 +76,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <SEOHead title="Create Account" description="Create your ISHQARA account to track orders and save addresses." noIndex />
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-serif">Create an account</CardTitle>

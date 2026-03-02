@@ -1,11 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import SEOHead from "@/components/SEOHead";
 
 export default function PrivacyPolicyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10" data-testid="page-privacy">
+      <SEOHead title="Privacy Policy" description="Read ISHQARA's Privacy Policy. Learn how we collect, use, and protect your personal information." canonicalPath="/privacy-policy" />
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle className="font-serif text-2xl">Privacy Policy</CardTitle>
+          <h1 className="font-serif text-2xl font-bold">Privacy Policy</h1>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p>

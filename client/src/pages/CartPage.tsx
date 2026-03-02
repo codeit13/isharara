@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCart } from "@/lib/cart";
 import { useSettings } from "@/hooks/use-settings";
 import ProductCard from "@/components/ProductCard";
+import SEOHead from "@/components/SEOHead";
 import type { ProductWithSizes } from "@shared/schema";
 
 // ── Free-shipping progress bar ────────────────────────────────────────────────
@@ -159,6 +160,7 @@ export default function CartPage() {
   return (
     /* pb-28 on mobile clears the fixed bottom checkout bar for ALL content including suggestions */
     <div className="max-w-4xl mx-auto px-4 py-6 md:py-8 pb-28 md:pb-8" data-testid="page-cart">
+      <SEOHead title="Your Bag" description="Review your ISHQARA shopping bag." noIndex />
       <Link href="/shop">
         <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back-shop">
           <ArrowLeft className="w-4 h-4 mr-1" /> Continue Shopping

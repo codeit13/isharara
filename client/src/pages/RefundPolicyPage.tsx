@@ -1,11 +1,13 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import SEOHead from "@/components/SEOHead";
 
 export default function RefundPolicyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10" data-testid="page-refund-policy">
+      <SEOHead title="Refund & Cancellation Policy" description="Read ISHQARA's refund and cancellation policy. Learn about our return process and how to request a refund." canonicalPath="/refund-policy" />
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle className="font-serif text-2xl">Refund &amp; Cancellation Policy</CardTitle>
+          <h1 className="font-serif text-2xl font-bold">Refund &amp; Cancellation Policy</h1>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p>

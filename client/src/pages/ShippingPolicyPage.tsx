@@ -1,11 +1,13 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import SEOHead from "@/components/SEOHead";
 
 export default function ShippingPolicyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10" data-testid="page-shipping-policy">
+      <SEOHead title="Shipping & Delivery Policy" description="Learn about ISHQARA's shipping and delivery timelines, charges, and free shipping offers." canonicalPath="/shipping-policy" />
       <Card className="border-0 shadow-sm">
         <CardHeader>
-          <CardTitle className="font-serif text-2xl">Shipping &amp; Delivery Policy</CardTitle>
+          <h1 className="font-serif text-2xl font-bold">Shipping &amp; Delivery Policy</h1>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-muted-foreground">
           <p>

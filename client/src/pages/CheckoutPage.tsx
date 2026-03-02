@@ -10,6 +10,7 @@ import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSettings } from "@/hooks/use-settings";
+import SEOHead from "@/components/SEOHead";
 import { loadRazorpay } from "@/lib/razorpay";
 import {
   buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
@@ -415,6 +416,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 md:py-8" data-testid="page-checkout">
+      <SEOHead title="Checkout" description="Complete your ISHQARA order." noIndex />
       <Link href="/cart">
         <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back-cart">
           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Cart
