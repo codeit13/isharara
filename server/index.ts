@@ -4,6 +4,7 @@ import { serveStatic } from "./static";
 import { createServer } from "http";
 import { seedDatabase } from "./seed";
 import { setupAuth } from "./auth";
+import { storage } from "./storage";
 
 const app = express();
 const httpServer = createServer(app);
@@ -65,6 +66,7 @@ app.use((req, res, next) => {
   await setupAuth(app);
   await registerRoutes(httpServer, app);
   await seedDatabase();
+  await storage.seedDefaultSettings();
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;

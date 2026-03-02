@@ -270,6 +270,92 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
+  // CSV template download
+  app.get("/api/admin/products/csv-template", isAuthenticated, requireAdmin, (_req, res) => {
+    const headers = [
+      "name", "brand", "description", "category", "notes",
+      "image", "gender", "productType",
+      "isBestseller", "isTrending", "isNewArrival",
+      "sizes",
+    ];
+    const example = [
+      "Rose Noir", "ISHQARA", "A dark floral scent with rose and oud",
+      "Floral", "Rose,Oud,Musk", "/images/perfume-1.png",
+      "women", "og", "false", "false", "false",
+      "30ml:799:999:50|50ml:1299:1599:30",
+    ];
+    const csv = [headers.join(","), example.map((v) => `"${v}"`).join(",")].join("\n");
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", "attachment; filename=ishqara-products-template.csv");
+    res.send(csv);
+  });
+
+  // CSV bulk import
+  app.post("/api/admin/products/import-csv", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { rows } = z.object({
+        rows: z.array(z.object({
+          name: z.string().min(1),
+          brand: z.string().default("ISHQARA"),
+          description: z.string().default(""),
+          category: z.string().default("Floral"),
+          notes: z.string().default(""),
+          image: z.string().default("/images/perfume-1.png"),
+          gender: z.string().default("unisex"),
+          productType: z.string().default("og"),
+          isBestseller: z.string().optional(),
+          isTrending: z.string().optional(),
+          isNewArrival: z.string().optional(),
+          sizes: z.string().min(1),
+        })).min(1),
+      }).parse(req.body);
+
+      const results: { name: string; success: boolean; error?: string }[] = [];
+
+      for (const row of rows) {
+        try {
+          const notesArr = row.notes.split(",").map((n) => n.trim()).filter(Boolean);
+          const parsedSizes = row.sizes.split("|").map((seg) => {
+            const [size, price, originalPrice, stock] = seg.trim().split(":");
+            return {
+              size: size?.trim() || "",
+              price: Number(price) || 0,
+              originalPrice: Number(originalPrice) > 0 ? Number(originalPrice) : null,
+              stock: Number(stock) || 0,
+              productId: 0,
+            };
+          }).filter((s) => s.size);
+
+          if (!parsedSizes.length) throw new Error("No valid sizes parsed");
+
+          await storage.createProduct({
+            name: row.name.trim(),
+            brand: row.brand || "ISHQARA",
+            description: row.description,
+            category: row.category,
+            notes: notesArr,
+            image: row.image,
+            gender: row.gender,
+            productType: row.productType,
+            isBestseller: row.isBestseller === "true",
+            isTrending: row.isTrending === "true",
+            isNewArrival: row.isNewArrival === "true",
+          }, parsedSizes);
+
+          results.push({ name: row.name, success: true });
+        } catch (e: any) {
+          results.push({ name: row.name || "Unknown", success: false, error: e.message });
+        }
+      }
+
+      const imported = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+      res.json({ imported, failed, results });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
   app.post("/api/admin/promotions", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const promoSchema = z.object({
@@ -350,6 +436,46 @@ export async function registerRoutes(
   app.patch("/api/addresses/:id/default", isAuthenticated, async (req: any, res) => {
     await storage.setDefaultAddress(Number(req.params.id), req.user.id);
     res.json({ success: true });
+  });
+
+  // ── Settings ────────────────────────────────────────────────────────────────
+  // Public read: frontend needs shipping fee, store name, UPI config, etc.
+  app.get("/api/settings", async (_req, res) => {
+    try {
+      const rows = await storage.getSettings();
+      // Return as { key: value } map for easy consumption
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value;
+      res.json(map);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Full settings list with metadata — admin only
+  app.get("/api/admin/settings", isAuthenticated, requireAdmin, async (_req, res) => {
+    try {
+      const rows = await storage.getSettings();
+      res.json(rows);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // Bulk update settings — admin only
+  app.patch("/api/admin/settings", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const body = z.record(z.string(), z.string()).parse(req.body);
+      await storage.upsertSettings(
+        Object.entries(body).map(([key, value]) => ({ key, value }))
+      );
+      const rows = await storage.getSettings();
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value;
+      res.json(map);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
   });
 
   return httpServer;

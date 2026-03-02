@@ -2,6 +2,10 @@ export interface UpiParams {
   amount: number;       // in rupees (e.g. 499)
   orderId: string | number;
   note?: string;
+  /** Override from DB settings; falls back to VITE_UPI_ID env var */
+  upiId?: string;
+  /** Override from DB settings; falls back to VITE_UPI_BUSINESS_NAME env var */
+  businessName?: string;
 }
 
 /**
@@ -26,8 +30,8 @@ function getBrandedNote(orderId: string | number): string {
 
 /** Build the standard UPI payment URI (used for deep links and QR codes). */
 export function buildUpiUrl(params: UpiParams): string {
-  const upiId = import.meta.env.VITE_UPI_ID as string | undefined;
-  const name  = (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) ?? "ISHQARA";
+  const upiId = params.upiId || (import.meta.env.VITE_UPI_ID as string | undefined) || "";
+  const name  = params.businessName || (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) || "ISHQARA";
 
   if (!upiId) return "";
 

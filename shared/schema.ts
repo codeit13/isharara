@@ -96,6 +96,17 @@ export const subscribers = pgTable("subscribers", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  label: text("label").notNull(),       // human-readable name shown in admin
+  description: text("description"),     // helper text shown in admin
+  type: text("type").notNull().default("string"), // 'string' | 'number' | 'boolean'
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export type Setting = typeof settings.$inferSelect;
+
 export const insertAddressSchema = createInsertSchema(addresses).omit({ id: true, createdAt: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true });
 export const insertProductSizeSchema = createInsertSchema(productSizes).omit({ id: true });

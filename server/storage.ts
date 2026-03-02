@@ -6,8 +6,9 @@ import {
   type Promotion, type InsertPromotion,
   type Subscriber, type InsertSubscriber,
   type Address, type InsertAddress,
+  type Setting,
   type ProductWithSizes,
-  products, productSizes, reviews, orders, promotions, subscribers, addresses,
+  products, productSizes, reviews, orders, promotions, subscribers, addresses, settings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and, isNull } from "drizzle-orm";
@@ -44,6 +45,12 @@ export interface IStorage {
   updateAddress(id: number, userId: string, data: Partial<InsertAddress>): Promise<Address | undefined>;
   deleteAddress(id: number, userId: string): Promise<{ deleted: boolean; reason?: string }>;
   setDefaultAddress(id: number, userId: string): Promise<void>;
+
+  getSettings(): Promise<Setting[]>;
+  getSetting(key: string): Promise<string | undefined>;
+  upsertSetting(key: string, value: string): Promise<Setting>;
+  upsertSettings(entries: { key: string; value: string }[]): Promise<void>;
+  seedDefaultSettings(): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -238,6 +245,53 @@ export class DatabaseStorage implements IStorage {
   async setDefaultAddress(id: number, userId: string): Promise<void> {
     await db.update(addresses).set({ isDefault: false }).where(eq(addresses.userId, userId));
     await db.update(addresses).set({ isDefault: true }).where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
+  }
+
+  async getSettings(): Promise<Setting[]> {
+    return db.select().from(settings).orderBy(settings.key);
+  }
+
+  async getSetting(key: string): Promise<string | undefined> {
+    const [row] = await db.select().from(settings).where(eq(settings.key, key));
+    return row?.value;
+  }
+
+  async upsertSetting(key: string, value: string): Promise<Setting> {
+    const [row] = await db
+      .insert(settings)
+      .values({ key, value, label: key, updatedAt: new Date() })
+      .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } })
+      .returning();
+    return row;
+  }
+
+  async upsertSettings(entries: { key: string; value: string }[]): Promise<void> {
+    for (const { key, value } of entries) {
+      await db
+        .insert(settings)
+        .values({ key, value, label: key, updatedAt: new Date() })
+        .onConflictDoUpdate({ target: settings.key, set: { value, updatedAt: new Date() } });
+    }
+  }
+
+  async seedDefaultSettings(): Promise<void> {
+    const defaults: Omit<Setting, "updatedAt">[] = [
+      { key: "shipping_fee",            value: "99",                        label: "Shipping Fee (₹)",              description: "Flat shipping fee charged per order",          type: "number" },
+      { key: "free_shipping_threshold", value: "1499",                      label: "Free Shipping Threshold (₹)",   description: "Order subtotal above which shipping is free",   type: "number" },
+      { key: "store_name",              value: "ISHQARA",                   label: "Store Name",                    description: "Displayed across the site and in UPI payments", type: "string" },
+      { key: "store_email",             value: "ishqaraperfumes@gmail.com", label: "Support Email",                 description: "Contact / support email",                       type: "string" },
+      { key: "store_phone",             value: "+91 98679 02305",           label: "Support Phone",                 description: "WhatsApp / support phone number",               type: "string" },
+      { key: "upi_id",                  value: "",                          label: "UPI ID",                        description: "Business UPI VPA e.g. ishqara@upi",             type: "string" },
+      { key: "upi_business_name",       value: "ISHQARA",                   label: "UPI Business Name",             description: "Name shown in UPI payment screens",             type: "string" },
+      { key: "cod_enabled",             value: "false",                     label: "Cash on Delivery",              description: "Enable or disable Cash on Delivery option",     type: "boolean" },
+      { key: "min_order_amount",        value: "0",                         label: "Minimum Order Amount (₹)",      description: "Minimum cart value required to place an order",  type: "number" },
+    ];
+    for (const d of defaults) {
+      await db
+        .insert(settings)
+        .values({ ...d, updatedAt: new Date() })
+        .onConflictDoNothing();
+    }
   }
 }
 

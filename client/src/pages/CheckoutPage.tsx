@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { useSettings } from "@/hooks/use-settings";
 import { loadRazorpay } from "@/lib/razorpay";
 import {
   buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
@@ -21,6 +22,7 @@ export default function CheckoutPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { shippingFee, freeShippingThreshold, upiId: settingsUpiId, upiBusinessName: settingsUpiName } = useSettings();
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<number | null>(null);
@@ -75,7 +77,7 @@ export default function CheckoutPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, addresses]);
 
-  const shipping = totalPrice >= 1499 ? 0 : 99;
+  const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
 
   const discountAmount = (() => {
     if (!appliedPromo || !appliedPromo.isActive) return 0;
@@ -213,7 +215,7 @@ export default function CheckoutPage() {
         setUpiState("pending");
         setIsSubmitting(false);
         // Trigger the intent (device-specific)
-        const upiUrl = buildUpiUrl({ amount: finalAmount, orderId: order.id });
+        const upiUrl = buildUpiUrl({ amount: finalAmount, orderId: order.id, upiId: settingsUpiId, businessName: settingsUpiName });
         const device = detectDevice();
         if (device === "android" && upiUrl) {
           triggerAndroidUpi(upiUrl);
@@ -237,11 +239,11 @@ export default function CheckoutPage() {
 
   // UPI pending screen — shown after order is created, waiting for user to complete payment
   if (upiState === "pending" && upiOrderId) {
-    const upiUrl   = buildUpiUrl({ amount: upiAmount, orderId: upiOrderId });
-    const appUrls  = buildAppUpiUrls({ amount: upiAmount, orderId: upiOrderId });
+    const upiId    = settingsUpiId || (import.meta.env.VITE_UPI_ID as string | undefined) || "";
+    const bizName  = settingsUpiName || (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) || "ISHQARA";
+    const upiUrl   = buildUpiUrl({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName });
+    const appUrls  = buildAppUpiUrls({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName });
     const device   = detectDevice();
-    const upiId    = import.meta.env.VITE_UPI_ID as string | undefined;
-    const bizName  = (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) ?? "ISHQARA";
 
     return (
       <div className="max-w-lg mx-auto px-4 py-12 text-center">
@@ -291,7 +293,7 @@ export default function CheckoutPage() {
                 <div className="flex justify-center">
                   <div className="p-3 rounded-xl border bg-white shadow-sm inline-block">
                     <QRCodeSVG
-                      value={buildUpiQrValue({ amount: upiAmount, orderId: upiOrderId })}
+                      value={buildUpiQrValue({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName })}
                       size={200}
                       level="M"
                       includeMargin={false}
