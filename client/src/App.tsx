@@ -17,6 +17,11 @@ import AdminPage from "@/pages/AdminPage";
 import AccountPage from "@/pages/AccountPage";
 import LoginPage from "@/pages/LoginPage";
 import RegisterPage from "@/pages/RegisterPage";
+import PrivacyPolicyPage from "@/pages/PrivacyPolicyPage";
+import TermsPage from "@/pages/TermsPage";
+import RefundPolicyPage from "@/pages/RefundPolicyPage";
+import ShippingPolicyPage from "@/pages/ShippingPolicyPage";
+import ContactPage from "@/pages/ContactPage";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -33,6 +38,11 @@ function Router() {
       <Route path="/account" component={AccountPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/register" component={RegisterPage} />
+      <Route path="/privacy-policy" component={PrivacyPolicyPage} />
+      <Route path="/terms" component={TermsPage} />
+      <Route path="/refund-policy" component={RefundPolicyPage} />
+      <Route path="/shipping-policy" component={ShippingPolicyPage} />
+      <Route path="/contact" component={ContactPage} />
       <Route component={NotFound} />
     </Switch>
   );

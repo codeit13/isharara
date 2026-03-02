@@ -34,9 +34,9 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-sm mb-3">Help</h4>
             <div className="flex flex-col gap-2">
-              <span className="text-sm text-muted-foreground">Shipping Info</span>
-              <span className="text-sm text-muted-foreground">Returns & Exchange</span>
-              <span className="text-sm text-muted-foreground">Contact Us</span>
+              <Link href="/shipping-policy" className="text-sm text-muted-foreground">Shipping Info</Link>
+              <Link href="/refund-policy" className="text-sm text-muted-foreground">Returns &amp; Refunds</Link>
+              <Link href="/contact" className="text-sm text-muted-foreground">Contact Us</Link>
             </div>
           </div>
 
@@ -48,9 +48,15 @@ export default function Footer() {
         </div>
 
         <div className="border-t mt-8 pt-6">
-          <p className="text-xs text-muted-foreground text-center">
-            &copy; {new Date().getFullYear()} ISHQARA. All rights reserved. Crafted with love.
-          </p>
+          <div className="flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-muted-foreground">
+            <p className="order-2 md:order-1">
+              &copy; {new Date().getFullYear()} ISHQARA. All rights reserved. Crafted with love.
+            </p>
+            <div className="flex items-center gap-3 order-1 md:order-2">
+              <Link href="/privacy-policy" className="hover:text-foreground">Privacy</Link>
+              <Link href="/terms" className="hover:text-foreground">Terms</Link>
+            </div>
+          </div>
         </div>
       </div>
     </footer>

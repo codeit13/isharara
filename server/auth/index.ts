@@ -4,6 +4,7 @@ import connectPg from "connect-pg-simple";
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Strategy as GoogleStrategy, type Profile } from "passport-google-oauth20";
+import { OAuth2Client } from "google-auth-library";
 import { authStorage } from "./storage";
 import type { User } from "@shared/models/auth";
 
@@ -86,9 +87,10 @@ export async function setupAuth(app: Express): Promise<void> {
     )
   );
 
-  // ----- Passport: Google OAuth -----
+  // ----- Google OAuth / One Tap shared helpers -----
   const googleClientID = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const googleOAuthClient = googleClientID ? new OAuth2Client(googleClientID) : null;
 
   /** Build base URL from request so redirect_uri works in prod (no hardcoded localhost). */
   function getBaseUrlFromRequest(req: Request): string {
@@ -98,6 +100,47 @@ export async function setupAuth(app: Express): Promise<void> {
     return `${protocol}://${host}`;
   }
 
+  async function findOrCreateGoogleUser(params: {
+    googleId: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    photo: string | null;
+  }): Promise<User> {
+    const { googleId, email, firstName, lastName, photo } = params;
+
+    // 1. If we already have a user with this googleId, return it
+    const existingByGoogle = await authStorage.getUserByGoogleId(googleId);
+    if (existingByGoogle) return existingByGoogle;
+
+    // 2. If a user exists with this email (email/password), link Google to that account
+    if (email) {
+      const existingByEmail = await authStorage.getUserByEmail(email.toLowerCase());
+      if (existingByEmail) {
+        return await authStorage.upsertUser({
+          id: existingByEmail.id,
+          email: existingByEmail.email,
+          googleId,
+          provider: "google",
+          firstName: firstName ?? existingByEmail.firstName,
+          lastName: lastName ?? existingByEmail.lastName,
+          profileImageUrl: photo ?? existingByEmail.profileImageUrl,
+        });
+      }
+    }
+
+    // 3. Otherwise create a new Google-based user
+    return await authStorage.upsertUser({
+      email,
+      googleId,
+      provider: "google",
+      firstName,
+      lastName,
+      profileImageUrl: photo,
+    });
+  }
+
+  // ----- Passport: Google OAuth -----
   if (googleClientID && googleClientSecret) {
     passport.use(
       new GoogleStrategy(
@@ -111,25 +154,21 @@ export async function setupAuth(app: Express): Promise<void> {
         },
         async (_accessToken: string, _refreshToken: string, profile: Profile, done: (err: unknown, user?: User) => void) => {
           try {
-            const googleId = profile.id;
-            let user = await authStorage.getUserByGoogleId(googleId);
-            if (user) {
-              return done(null, user);
-            }
             const email = profile.emails?.[0]?.value || null;
             const displayName = profile.displayName || "";
             const parts = displayName.split(" ");
             const firstName = parts[0] || null;
             const lastName = parts.slice(1).join(" ") || null;
             const photo = profile.photos?.[0]?.value || null;
-            user = await authStorage.upsertUser({
+
+            const user = await findOrCreateGoogleUser({
+              googleId: profile.id,
               email,
-              googleId,
-              provider: "google",
               firstName,
               lastName,
-              profileImageUrl: photo,
+              photo,
             });
+
             return done(null, user);
           } catch (e) {
             return done(e);
@@ -215,6 +254,54 @@ export async function setupAuth(app: Express): Promise<void> {
         res.redirect("/");
       });
     })(req, res, next);
+  });
+
+  // ----- Google One Tap (JWT credential) -----
+  app.post("/api/auth/google-one-tap", async (req, res) => {
+    try {
+      if (!googleClientID || !googleOAuthClient) {
+        return res.status(503).json({ message: "Google One Tap is not configured" });
+      }
+
+      const { credential } = req.body || {};
+      if (!credential || typeof credential !== "string") {
+        return res.status(400).json({ message: "Missing Google credential" });
+      }
+
+      const ticket = await googleOAuthClient.verifyIdToken({
+        idToken: credential,
+        audience: googleClientID,
+      });
+      const payload = ticket.getPayload();
+      if (!payload) {
+        return res.status(401).json({ message: "Invalid Google credential" });
+      }
+
+      const googleId = payload.sub;
+      const email = (payload.email as string | undefined) || null;
+      const fullName = (payload.name as string | undefined) || "";
+      const parts = fullName.split(" ");
+      const firstName = parts[0] || null;
+      const lastName = parts.slice(1).join(" ") || null;
+      const photo = (payload.picture as string | undefined) || null;
+
+      const user = await findOrCreateGoogleUser({
+        googleId,
+        email,
+        firstName,
+        lastName,
+        photo,
+      });
+
+      (req.session as any).userId = user.id;
+      req.session.save((err) => {
+        if (err) return res.status(500).json({ message: "Session save failed" });
+        res.json({ user: toPublicUser(user) });
+      });
+    } catch (e: any) {
+      console.error("Google One Tap error:", e);
+      res.status(500).json({ message: e.message || "Google One Tap login failed" });
+    }
   });
 
   // ----- WhatsApp / Phone OTP -----
