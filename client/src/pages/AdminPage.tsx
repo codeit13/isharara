@@ -173,6 +173,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const [form, setForm] = useState({
     name: "", brand: "ISHQARA", description: "", category: "Floral",
     notes: "", image: "/images/perfume-1.png", gender: "unisex",
+    productType: "og",
     isBestseller: false, isTrending: false, isNewArrival: false,
     sizes: [{ size: "30ml", price: 799, originalPrice: 0, stock: 50 }],
   });
@@ -247,17 +248,27 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2 pt-5">
-              <div className="flex items-center gap-2"><Switch checked={form.isBestseller} onCheckedChange={(v) => setForm({ ...form, isBestseller: v })} /><Label className="text-xs">Bestseller</Label></div>
-              <div className="flex items-center gap-2"><Switch checked={form.isTrending} onCheckedChange={(v) => setForm({ ...form, isTrending: v })} /><Label className="text-xs">Trending</Label></div>
-              <div className="flex items-center gap-2"><Switch checked={form.isNewArrival} onCheckedChange={(v) => setForm({ ...form, isNewArrival: v })} /><Label className="text-xs">New Arrival</Label></div>
+            <div className="space-y-1">
+              <Label className="text-xs">Product Type</Label>
+              <Select value={form.productType} onValueChange={(v) => setForm({ ...form, productType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="og">OG (Original)</SelectItem>
+                  <SelectItem value="recreation">Recreation</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2"><Switch checked={form.isBestseller} onCheckedChange={(v) => setForm({ ...form, isBestseller: v })} /><Label className="text-xs">Bestseller</Label></div>
+            <div className="flex items-center gap-2"><Switch checked={form.isTrending} onCheckedChange={(v) => setForm({ ...form, isTrending: v })} /><Label className="text-xs">Trending</Label></div>
+            <div className="flex items-center gap-2"><Switch checked={form.isNewArrival} onCheckedChange={(v) => setForm({ ...form, isNewArrival: v })} /><Label className="text-xs">New Arrival</Label></div>
           </div>
 
           <Separator />
           <div className="flex items-center justify-between"><Label className="text-xs font-semibold">Sizes & Pricing</Label><Button size="sm" variant="outline" onClick={addSize} type="button"><Plus className="w-3 h-3 mr-1" /> Size</Button></div>
           {form.sizes.map((s, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2">
+            <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="30ml" />
               <Input type="number" value={s.price} onChange={(e) => updateSize(i, "price", Number(e.target.value))} placeholder="Price" />
               <Input type="number" value={s.originalPrice} onChange={(e) => updateSize(i, "originalPrice", Number(e.target.value))} placeholder="MRP" />
@@ -285,6 +296,7 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
     notes: product.notes.join(", "),
     image: product.image,
     gender: product.gender,
+    productType: (product as any).productType ?? "og",
     isBestseller: product.isBestseller,
     isTrending: product.isTrending,
     isNewArrival: product.isNewArrival,
@@ -349,6 +361,29 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
             <div className="space-y-1"><Label className="text-xs">Notes (comma-sep)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="space-y-1"><Label className="text-xs">Image Path</Label><Input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} /></div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Gender</Label>
+              <Select value={form.gender} onValueChange={(v) => setForm({ ...form, gender: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="women">Women</SelectItem>
+                  <SelectItem value="men">Men</SelectItem>
+                  <SelectItem value="unisex">Unisex</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Product Type</Label>
+              <Select value={form.productType} onValueChange={(v) => setForm({ ...form, productType: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="og">OG (Original)</SelectItem>
+                  <SelectItem value="recreation">Recreation</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-4">
             <div className="flex items-center gap-2"><Switch checked={form.isBestseller} onCheckedChange={(v) => setForm({ ...form, isBestseller: v })} /><Label className="text-xs">Bestseller</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isTrending} onCheckedChange={(v) => setForm({ ...form, isTrending: v })} /><Label className="text-xs">Trending</Label></div>
@@ -357,7 +392,7 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
           <Separator />
           <Label className="text-xs font-semibold">Sizes & Pricing</Label>
           {form.sizes.map((s, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2">
+            <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="Size" />
               <Input type="number" value={s.price} onChange={(e) => updateSize(i, "price", Number(e.target.value))} placeholder="Price" />
               <Input type="number" value={s.originalPrice} onChange={(e) => updateSize(i, "originalPrice", Number(e.target.value))} placeholder="MRP" />
@@ -549,7 +584,7 @@ export default function AdminPage() {
       <DashboardStats products={products || []} orders={orders || []} />
 
       <Tabs defaultValue="orders" className="w-full">
-        <TabsList className="w-full justify-start">
+        <TabsList className="w-full justify-start overflow-x-auto">
           <TabsTrigger value="orders" data-testid="tab-trigger-orders">
             <ShoppingCart className="w-4 h-4 mr-1" /> Orders
           </TabsTrigger>

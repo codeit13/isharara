@@ -193,14 +193,15 @@ export default function AdminLoginPage({ onSuccess }: AdminLoginPageProps) {
 
           {/* Social options */}
           <div className="space-y-3">
-            <div className="flex justify-center">
+            <div className="w-full overflow-hidden">
               <GoogleLogin
                 onSuccess={(res) => res.credential && handleCredential(res.credential)}
                 onError={onGoogleError}
                 text="continue_with"
                 shape="rectangular"
                 size="large"
-                width="380"
+                width="400"
+                useOneTap={false}
               />
             </div>
 

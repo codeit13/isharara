@@ -63,7 +63,7 @@ function AddressForm({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Label</Label>
           <Input value={form.label} onChange={(e) => set("label", e.target.value)} placeholder="Home / Work" />
@@ -85,7 +85,7 @@ function AddressForm({
         <Label className="text-xs">Address line 2 (optional)</Label>
         <Input value={form.addressLine2} onChange={(e) => set("addressLine2", e.target.value)} placeholder="Landmark, Area" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">City</Label>
           <Input value={form.city} onChange={(e) => set("city", e.target.value)} placeholder="City" />
@@ -95,7 +95,7 @@ function AddressForm({
           <Input value={form.state} onChange={(e) => set("state", e.target.value)} placeholder="State" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Pincode</Label>
           <Input value={form.pincode} onChange={(e) => set("pincode", e.target.value)} placeholder="110001" />
@@ -388,22 +388,21 @@ export default function AccountPage() {
     <div className="max-w-4xl mx-auto px-4 py-8 space-y-8" data-testid="page-account">
       {/* Profile card */}
       <Card className="border-0 shadow-sm bg-gradient-to-r from-primary/5 to-primary/10">
-        <CardContent className="p-6 flex items-center gap-5">
-          <Avatar className="h-16 w-16">
+        <CardContent className="p-4 sm:p-6 flex flex-wrap items-center gap-4">
+          <Avatar className="h-14 w-14 sm:h-16 sm:w-16 flex-shrink-0">
             <AvatarImage src={user?.profileImageUrl || undefined} alt={user?.firstName || "User"} />
             <AvatarFallback className="text-lg bg-primary/20 text-primary font-bold">{getInitials()}</AvatarFallback>
           </Avatar>
-          <div className="flex-1">
-            <h1 className="text-2xl font-serif font-bold" data-testid="text-account-name">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-serif font-bold truncate" data-testid="text-account-name">
               {user?.firstName} {user?.lastName}
             </h1>
-            <p className="text-muted-foreground text-sm" data-testid="text-account-email">
+            <p className="text-muted-foreground text-sm truncate" data-testid="text-account-email">
               {user?.email || user?.phone || "Signed in with WhatsApp"}
             </p>
           </div>
           <Button
             variant="outline"
-            size="sm"
             onClick={() => { window.location.href = "/api/logout"; }}
             data-testid="button-account-logout"
           >

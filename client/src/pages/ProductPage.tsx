@@ -219,18 +219,18 @@ export default function ProductPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 pt-2">
-            <div className="text-center p-3 rounded-md bg-muted/50">
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
               <Truck className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] text-muted-foreground">Free Delivery 1499+</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Free Delivery ₹1499+</p>
             </div>
-            <div className="text-center p-3 rounded-md bg-muted/50">
+            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
               <RotateCcw className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] text-muted-foreground">7-Day Returns</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">7-Day Returns</p>
             </div>
-            <div className="text-center p-3 rounded-md bg-muted/50">
+            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
               <Shield className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] text-muted-foreground">100% Authentic</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">100% Authentic</p>
             </div>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function ProductPage() {
               data-testid="input-review-comment"
             />
             <Button
-              size="sm"
+              className="w-full sm:w-auto"
               disabled={!reviewName || !reviewComment || addReviewMutation.isPending}
               onClick={() => addReviewMutation.mutate()}
               data-testid="button-submit-review"

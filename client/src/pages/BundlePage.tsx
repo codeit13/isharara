@@ -101,7 +101,7 @@ export default function BundlePage() {
         ))}
       </div>
 
-      <div className="grid md:grid-cols-3 gap-8">
+      <div className="grid md:grid-cols-3 gap-4 md:gap-8 pb-24 md:pb-0">
         <div className="md:col-span-2">
           <div className="flex items-center justify-between gap-2 mb-4">
             <p className="text-sm font-medium">
@@ -167,7 +167,8 @@ export default function BundlePage() {
           )}
         </div>
 
-        <div className="md:col-span-1">
+        {/* Desktop bundle summary — hidden on mobile */}
+        <div className="md:col-span-1 hidden md:block">
           <div className="sticky top-20 p-5 rounded-md border bg-card">
             <div className="flex items-center gap-2 mb-4">
               <Gift className="w-4 h-4 text-primary" />
@@ -230,6 +231,30 @@ export default function BundlePage() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Mobile sticky bottom bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">
+            {selected.length}/{bundleConfig.count} selected
+            {bundleConfig.discount > 0 && ` · ${bundleConfig.discount}% off`}
+          </p>
+          {isComplete ? (
+            <p className="text-base font-bold">Rs. {bundleTotal.toLocaleString()}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">Select {bundleConfig.count - selected.length} more</p>
+          )}
+        </div>
+        <Button
+          className="flex-1 max-w-[200px]"
+          disabled={!isComplete}
+          onClick={handleAddBundle}
+          data-testid="button-add-bundle-mobile"
+        >
+          <ShoppingBag className="w-4 h-4 mr-2" />
+          {isComplete ? "Add to Bag" : `${selected.length}/${bundleConfig.count}`}
+        </Button>
       </div>
     </div>
   );

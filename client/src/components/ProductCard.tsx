@@ -75,7 +75,8 @@ export default function ProductCard({ product }: { product: ProductWithSizes }) 
               </Badge>
             </div>
           )}
-          <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          {/* Always visible on touch devices; hover-revealed on desktop */}
+          <div className="absolute bottom-2 right-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <Button size="icon" variant="secondary" onClick={handleQuickAdd} data-testid={`button-quickadd-${product.id}`}>
               <ShoppingBag className="w-4 h-4" />
             </Button>

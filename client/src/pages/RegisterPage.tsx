@@ -83,7 +83,7 @@ export default function RegisterPage() {
         <CardContent className="space-y-6">
           {/* Email / password registration at the top */}
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label htmlFor="firstName">First name</Label>
                 <Input
@@ -169,14 +169,15 @@ export default function RegisterPage() {
           </div>
 
           {/* Google sign up */}
-          <div className="flex justify-center">
+          <div className="w-full overflow-hidden">
             <GoogleLogin
               onSuccess={(res) => res.credential && handleCredential(res.credential)}
               onError={onGoogleError}
               text="signup_with"
               shape="rectangular"
               size="large"
-              width="380"
+              width="400"
+              useOneTap={false}
             />
           </div>
 

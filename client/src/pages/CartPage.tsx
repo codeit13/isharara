@@ -38,7 +38,7 @@ export default function CartPage() {
         Your Bag ({items.reduce((s, i) => s + i.quantity, 0)} items)
       </h1>
 
-      <div className="grid md:grid-cols-3 gap-8">
+      <div className="grid md:grid-cols-3 gap-4 md:gap-8 pb-24 md:pb-0">
         <div className="md:col-span-2 space-y-4">
           {items.map((item) => (
             <div
@@ -94,7 +94,8 @@ export default function CartPage() {
           ))}
         </div>
 
-        <div className="md:col-span-1">
+        {/* Desktop order summary — hidden on mobile */}
+        <div className="md:col-span-1 hidden md:block">
           <div className="sticky top-20 p-5 rounded-md border bg-card">
             <h3 className="font-semibold mb-4">Order Summary</h3>
             <div className="space-y-2 text-sm">
@@ -122,6 +123,21 @@ export default function CartPage() {
             </Link>
           </div>
         </div>
+      </div>
+
+      {/* Mobile sticky bottom bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">
+            {shipping === 0 ? "Free shipping" : `+Rs. ${shipping} shipping`}
+          </p>
+          <p className="text-base font-bold" data-testid="text-cart-total">Rs. {grandTotal.toLocaleString()}</p>
+        </div>
+        <Link href="/checkout" className="flex-1 max-w-[200px]">
+          <Button className="w-full" data-testid="button-checkout">
+            Proceed to Checkout
+          </Button>
+        </Link>
       </div>
     </div>
   );

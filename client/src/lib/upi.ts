@@ -4,23 +4,54 @@ export interface UpiParams {
   note?: string;
 }
 
-/** Build the standard UPI payment URI */
+/**
+ * Branded UPI transaction notes — each ≤ 80 chars (NPCI limit).
+ * Rotated deterministically by order ID so the same order always sees the same note.
+ */
+const BRANDED_NOTES = [
+  "Your signature scent is on its way — ISHQARA",
+  "Crafted for those who wear their mood — ISHQARA",
+  "Luxury fragrance, delivered with love — ISHQARA",
+  "One spritz to remember — ISHQARA",
+  "You just made the room more interesting — ISHQARA",
+  "Fragrance that tells your story — ISHQARA",
+  "Bold. Elegant. Unapologetically you — ISHQARA",
+  "Your next obsession, sealed with a scent — ISHQARA",
+];
+
+function getBrandedNote(orderId: string | number): string {
+  const idx = Number(orderId) % BRANDED_NOTES.length;
+  return BRANDED_NOTES[Math.abs(idx)];
+}
+
+/** Build the standard UPI payment URI (used for deep links and QR codes). */
 export function buildUpiUrl(params: UpiParams): string {
   const upiId = import.meta.env.VITE_UPI_ID as string | undefined;
   const name  = (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) ?? "ISHQARA";
 
   if (!upiId) return "";
 
-  const p = new URLSearchParams({
-    pa: upiId,
-    pn: name,
-    am: params.amount.toFixed(2),
-    cu: "INR",
-    tr: `ISHQARA-${params.orderId}`,
-    tn: params.note ?? `Order #${params.orderId}`,
-  });
+  const note = params.note ?? getBrandedNote(params.orderId);
 
-  return `upi://pay?${p.toString()}`;
+  // URLSearchParams encodes spaces as '+'; UPI apps expect '%20' — use manual encoding
+  const parts = [
+    `pa=${encodeURIComponent(upiId)}`,
+    `pn=${encodeURIComponent(name)}`,
+    `am=${params.amount.toFixed(2)}`,
+    `cu=INR`,
+    `tr=${encodeURIComponent(`ISHQARA-${params.orderId}`)}`,
+    `tn=${encodeURIComponent(note)}`,
+  ];
+
+  return `upi://pay?${parts.join("&")}`;
+}
+
+/**
+ * Same URI but safe to embed in a QR code.
+ * All UPI apps (PhonePe, GPay, Paytm, BHIM) can scan upi://pay?... directly.
+ */
+export function buildUpiQrValue(params: UpiParams): string {
+  return buildUpiUrl(params);
 }
 
 /** Per-app URI for iOS (Safari does not support generic upi://) */

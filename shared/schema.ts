@@ -17,6 +17,7 @@ export const products = pgTable("products", {
   isTrending: boolean("is_trending").notNull().default(false),
   isNewArrival: boolean("is_new_arrival").notNull().default(false),
   gender: text("gender").notNull().default("unisex"),
+  productType: text("product_type").notNull().default("og"), // 'og' | 'recreation'
   avgRating: decimal("avg_rating", { precision: 2, scale: 1 }).notNull().default("0"),
   reviewCount: integer("review_count").notNull().default(0),
 });

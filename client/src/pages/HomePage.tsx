@@ -130,7 +130,7 @@ function BundleCTA() {
       <div className="max-w-7xl mx-auto px-4">
         <div className="relative rounded-md bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/30">
           <div className="grid md:grid-cols-2 gap-6 items-center">
-            <div className="p-8 md:p-12">
+            <div className="p-5 sm:p-8 md:p-12">
               <div className="flex items-center gap-2 mb-3">
                 <Gift className="w-5 h-5 text-primary" />
                 <span className="text-sm font-semibold text-primary uppercase tracking-wider">Gift Sets</span>

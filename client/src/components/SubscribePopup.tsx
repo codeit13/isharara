@@ -6,6 +6,38 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
+const STORAGE_KEY = "ishqara_popup";
+const MAX_SHOWS_PER_DAY = 2;
+const DELAY_MS = 4000;
+
+function shouldShowPopup(): boolean {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return true;
+    const { date, count } = JSON.parse(raw) as { date: string; count: number };
+    const today = new Date().toISOString().slice(0, 10);
+    if (date !== today) return true; // new day — reset
+    return count < MAX_SHOWS_PER_DAY;
+  } catch {
+    return true;
+  }
+}
+
+function recordShow() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const today = new Date().toISOString().slice(0, 10);
+    let count = 1;
+    if (raw) {
+      const parsed = JSON.parse(raw) as { date: string; count: number };
+      count = parsed.date === today ? parsed.count + 1 : 1;
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, count }));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 export default function SubscribePopup() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -14,16 +46,16 @@ export default function SubscribePopup() {
   const { toast } = useToast();
 
   useEffect(() => {
-    const dismissed = sessionStorage.getItem("ishqara_popup_dismissed");
-    if (!dismissed) {
-      const timer = setTimeout(() => setOpen(true), 3001);
-      return () => clearTimeout(timer);
-    }
+    if (!shouldShowPopup()) return;
+    const timer = setTimeout(() => {
+      setOpen(true);
+      recordShow();
+    }, DELAY_MS);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleClose = () => {
     setOpen(false);
-    sessionStorage.setItem("ishqara_popup_dismissed", "true");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,11 +79,12 @@ export default function SubscribePopup() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 border-0">
+      <DialogContent className="sm:max-w-md p-0 gap-0 border-0" hideCloseButton>
         <div className="relative bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 sm:p-8 rounded-lg">
           <button
             onClick={handleClose}
-            className="absolute top-3 right-3 text-muted-foreground"
+            className="absolute top-2 right-2 p-2.5 rounded-sm text-muted-foreground opacity-70 hover:opacity-100 transition-opacity"
+            aria-label="Close"
             data-testid="button-close-popup"
           >
             <X className="w-4 h-4" />

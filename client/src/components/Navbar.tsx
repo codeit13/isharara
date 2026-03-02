@@ -36,23 +36,37 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b" data-testid="navbar">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 h-16">
-        <div className="flex items-center gap-2 md:hidden">
+      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 h-16 relative">
+
+        {/* Hamburger — mobile only */}
+        <div className="flex items-center gap-2 md:hidden z-10">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button size="icon" variant="ghost" data-testid="button-mobile-menu">
                 <Menu className="w-5 h-5" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="left" className="w-72 p-6">
-              <div className="mt-6 flex flex-col gap-1">
+            <SheetContent side="left" className="w-72 p-0">
+              {/* Sidebar header with logo */}
+              <div className="flex items-center gap-3 px-5 py-4 border-b">
+                <Link href="/" onClick={() => setOpen(false)}>
+                  <img
+                    src="/logo.png"
+                    alt="ISHQARA"
+                    className="h-10 w-auto object-contain cursor-pointer"
+                  />
+                </Link>
+              </div>
+
+              {/* Nav links */}
+              <div className="px-3 pt-4 pb-6 flex flex-col gap-1">
                 {navLinks.map((link) => (
                   <Link key={link.href} href={link.href} onClick={() => setOpen(false)}>
                     <div
                       className={`px-4 py-3 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                         location === link.href
                           ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
                       }`}
                       data-testid={`link-mobile-${link.label.toLowerCase()}`}
                     >
@@ -60,26 +74,40 @@ export default function Navbar() {
                     </div>
                   </Link>
                 ))}
+
                 {isAuthenticated && (
                   <Link href="/account" onClick={() => setOpen(false)}>
-                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground cursor-pointer" data-testid="link-mobile-account">
+                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer" data-testid="link-mobile-account">
                       My Account
                     </div>
                   </Link>
                 )}
                 {user?.isAdmin && (
                   <Link href="/admin" onClick={() => setOpen(false)}>
-                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground cursor-pointer" data-testid="link-mobile-admin">
+                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer" data-testid="link-mobile-admin">
                       Admin
                     </div>
                   </Link>
+                )}
+
+                {/* Auth actions at the bottom of sidebar */}
+                {!isAuthenticated && !isLoading && (
+                  <div className="mt-4 pt-4 border-t flex flex-col gap-2">
+                    <Link href="/login" onClick={() => setOpen(false)}>
+                      <Button variant="outline" className="w-full">Login</Button>
+                    </Link>
+                    <Link href="/register" onClick={() => setOpen(false)}>
+                      <Button className="w-full">Sign up</Button>
+                    </Link>
+                  </div>
                 )}
               </div>
             </SheetContent>
           </Sheet>
         </div>
 
-        <Link href="/">
+        {/* Logo — absolutely centered on mobile, static on desktop */}
+        <Link href="/" className="absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0">
           <img
             src="/logo.png"
             alt="ISHQARA"

@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { loadRazorpay } from "@/lib/razorpay";
 import {
-  buildUpiUrl, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
+  buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
 } from "@/lib/upi";
+import { QRCodeSVG } from "qrcode.react";
 import type { Order, Promotion, Address } from "@shared/schema";
 
 export default function CheckoutPage() {
@@ -26,6 +27,7 @@ export default function CheckoutPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [upiState, setUpiState] = useState<"idle" | "pending" | "confirmed">("idle");
   const [upiOrderId, setUpiOrderId] = useState<number | null>(null);
+  const [upiAmount, setUpiAmount] = useState<number>(0);
   const [promoCode, setPromoCode] = useState("");
   const [appliedPromo, setAppliedPromo] = useState<Promotion | null>(null);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
@@ -204,13 +206,14 @@ export default function CheckoutPage() {
       if (data.razorpay) {
         await openRazorpayCheckout(order, data.razorpay);
       } else if (paymentMethod === "upi") {
-        // Order created; now trigger UPI intent
+        // Snapshot the amount BEFORE clearing the cart so the UPI screen stays correct
+        const finalAmount = grandTotal;
         setUpiOrderId(order.id);
+        setUpiAmount(finalAmount);
         setUpiState("pending");
-        clearCart();
         setIsSubmitting(false);
         // Trigger the intent (device-specific)
-        const upiUrl = buildUpiUrl({ amount: grandTotal, orderId: order.id });
+        const upiUrl = buildUpiUrl({ amount: finalAmount, orderId: order.id });
         const device = detectDevice();
         if (device === "android" && upiUrl) {
           triggerAndroidUpi(upiUrl);
@@ -234,8 +237,8 @@ export default function CheckoutPage() {
 
   // UPI pending screen — shown after order is created, waiting for user to complete payment
   if (upiState === "pending" && upiOrderId) {
-    const upiUrl   = buildUpiUrl({ amount: grandTotal, orderId: upiOrderId });
-    const appUrls  = buildAppUpiUrls({ amount: grandTotal, orderId: upiOrderId });
+    const upiUrl   = buildUpiUrl({ amount: upiAmount, orderId: upiOrderId });
+    const appUrls  = buildAppUpiUrls({ amount: upiAmount, orderId: upiOrderId });
     const device   = detectDevice();
     const upiId    = import.meta.env.VITE_UPI_ID as string | undefined;
     const bizName  = (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) ?? "ISHQARA";
@@ -246,9 +249,9 @@ export default function CheckoutPage() {
           <Smartphone className="w-8 h-8 text-primary" />
         </div>
         <h1 className="font-serif text-2xl font-bold mb-1">Complete your payment</h1>
-        <p className="text-sm text-muted-foreground mb-2">Order #{upiOrderId} · Rs. {grandTotal.toLocaleString()}</p>
+        <p className="text-sm text-muted-foreground mb-2">Order #{upiOrderId} · Rs. {upiAmount.toLocaleString()}</p>
         <p className="text-xs text-muted-foreground mb-6">
-          Pay <strong>Rs. {grandTotal.toLocaleString()}</strong> to <strong>{bizName}</strong>
+          Pay <strong>Rs. {upiAmount.toLocaleString()}</strong> to <strong>{bizName}</strong>
         </p>
 
         {/* Android: one-tap open any UPI app */}
@@ -279,13 +282,57 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        {/* Desktop: show UPI ID */}
-        {device === "desktop" && upiId && (
-          <div className="mb-4 p-4 rounded-md border bg-muted/50 max-w-xs mx-auto text-left">
-            <p className="text-xs text-muted-foreground mb-1">Pay to UPI ID</p>
-            <p className="font-mono font-bold text-sm select-all">{upiId}</p>
-            <p className="text-xs text-muted-foreground mt-1">Amount: Rs. {grandTotal.toLocaleString()}</p>
-            <p className="text-xs text-muted-foreground">Ref: ISHQARA-{upiOrderId}</p>
+        {/* Desktop: QR code + UPI ID fallback */}
+        {device === "desktop" && (
+          <div className="mb-4 max-w-xs mx-auto space-y-3">
+            {upiId ? (
+              <>
+                <p className="text-sm font-medium">Scan with any UPI app</p>
+                <div className="flex justify-center">
+                  <div className="p-3 rounded-xl border bg-white shadow-sm inline-block">
+                    <QRCodeSVG
+                      value={buildUpiQrValue({ amount: upiAmount, orderId: upiOrderId })}
+                      size={200}
+                      level="M"
+                      includeMargin={false}
+                      imageSettings={{
+                        src: "/logo.png",
+                        height: 36,
+                        width: 36,
+                        excavate: true,
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="p-3 rounded-md border bg-muted/50 text-left text-xs space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">UPI ID</span>
+                    <button
+                      className="font-mono font-semibold select-all hover:text-primary transition-colors"
+                      onClick={() => { navigator.clipboard?.writeText(upiId); }}
+                      title="Click to copy"
+                    >
+                      {upiId}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Amount</span>
+                    <span className="font-semibold">Rs. {upiAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Ref</span>
+                    <span className="font-mono">ISHQARA-{upiOrderId}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Open PhonePe, Google Pay, Paytm or any UPI app → Scan QR → Amount is pre-filled → Pay
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-destructive">
+                UPI ID not configured. Please contact support.
+              </p>
+            )}
           </div>
         )}
 
@@ -296,6 +343,7 @@ export default function CheckoutPage() {
         <Button
           className="w-full max-w-xs mx-auto"
           onClick={() => {
+            clearCart();
             setUpiState("confirmed");
             setOrderPlaced(true);
             setPlacedOrderId(upiOrderId);
@@ -329,12 +377,12 @@ export default function CheckoutPage() {
         <p className="text-sm text-muted-foreground mb-6">
           Thank you for your order. We&apos;ll send you a confirmation email with tracking details shortly.
         </p>
-        <div className="flex gap-3 justify-center">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/account">
-            <Button variant="outline" data-testid="button-view-orders">View My Orders</Button>
+            <Button variant="outline" className="w-full sm:w-auto" data-testid="button-view-orders">View My Orders</Button>
           </Link>
           <Link href="/shop">
-            <Button data-testid="button-continue-shopping">Continue Shopping</Button>
+            <Button className="w-full sm:w-auto" data-testid="button-continue-shopping">Continue Shopping</Button>
           </Link>
         </div>
       </div>
@@ -360,7 +408,7 @@ export default function CheckoutPage() {
 
       <h1 className="font-serif text-2xl md:text-3xl font-bold mb-6">Checkout</h1>
 
-      <div className="grid md:grid-cols-3 gap-8">
+      <div className="grid md:grid-cols-3 gap-4 md:gap-8 pb-24 md:pb-0">
         <div className="md:col-span-2 space-y-6">
           <div className="p-5 rounded-md border">
             <div className="flex items-center justify-between mb-4">
@@ -480,7 +528,8 @@ export default function CheckoutPage() {
           </div>
         </div>
 
-        <div className="md:col-span-1">
+        {/* Desktop order summary — hidden on mobile (sticky bottom bar used instead) */}
+        <div className="md:col-span-1 hidden md:block">
           <div className="sticky top-20 p-5 rounded-md border bg-card">
             <h3 className="font-semibold mb-4">Order Summary</h3>
             <div className="space-y-3 mb-4">
@@ -543,6 +592,25 @@ export default function CheckoutPage() {
             </Button>
           </div>
         </div>
+      </div>
+
+      {/* Mobile sticky bottom bar — shows total + place order */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur border-t px-4 py-3 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs text-muted-foreground">
+            {shipping === 0 ? "Free shipping" : `+Rs. ${shipping} shipping`}
+            {appliedPromo && discountAmount > 0 && ` · -Rs. ${discountAmount}`}
+          </p>
+          <p className="text-base font-bold" data-testid="text-checkout-total-mobile">Rs. {grandTotal.toLocaleString()}</p>
+        </div>
+        <Button
+          className="flex-1 max-w-[200px]"
+          disabled={!isFormValid || isSubmitting}
+          onClick={handlePlaceOrder}
+          data-testid="button-place-order-mobile"
+        >
+          {isSubmitting ? "Processing..." : "Place Order"}
+        </Button>
       </div>
     </div>
   );
