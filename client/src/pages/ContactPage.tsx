@@ -19,10 +19,8 @@ export default function ContactPage() {
     "email": storeEmail,
     "address": {
       "@type": "PostalAddress",
-      "streetAddress": "MUNDIYA KALAN, BAZPUR",
-      "addressLocality": "Udham Singh Nagar",
-      "addressRegion": "Uttarakhand",
-      "postalCode": "262401",
+      "addressLocality": "Mumbai",
+      "addressRegion": "Maharashtra",
       "addressCountry": "IN",
     },
     "openingHoursSpecification": {
@@ -72,15 +70,13 @@ export default function ContactPage() {
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Customer care hours</p>
-            <p>Monday to Saturday, 10:00 AM – 6:00 PM IST (excluding public holidays)</p>
+            <p>Monday to Saturday, 10:00 am – 6:00 pm IST (excluding public holidays)</p>
           </div>
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Registered address</p>
             <p>
-              ISHQARA<br />
-              MUNDIYA KALAN, BAZPUR<br />
-              UDHAM SINGH NAGAR, UTTARAKHAND, 262401<br />
+              Mumbai, Maharashtra.<br />
               India
             </p>
           </div>

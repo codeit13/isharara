@@ -11,7 +11,7 @@ import type { ProductWithSizes } from "@shared/schema";
 
 const categories = ["All", "Floral", "Oriental", "Woody", "Fresh", "Citrus"];
 const genders = ["All", "Women", "Men", "Unisex"];
-const productTypes = ["All", "OG", "Recreations"];
+const productTypes = ["All", "The Ishqara Collection", "Recreations"];
 
 function FilterPill({
   label,
@@ -63,7 +63,7 @@ export default function ShopPage() {
 
   if (category !== "All") filtered = filtered.filter((p) => p.category === category);
   if (gender !== "All") filtered = filtered.filter((p) => p.gender.toLowerCase() === gender.toLowerCase());
-  if (productType === "OG") filtered = filtered.filter((p) => (p as any).productType === "og");
+  if (productType === "The Ishqara Collection") filtered = filtered.filter((p) => (p as any).productType === "og");
   else if (productType === "Recreations") filtered = filtered.filter((p) => (p as any).productType === "recreation");
 
   if (sortBy === "price-low") {

@@ -12,23 +12,31 @@ function HeroSection() {
   return (
     <section className="relative w-full" data-testid="section-hero">
       <div className="relative h-[70vh] min-h-[480px] max-h-[640px]">
+        {/* Hero banner: recommended 1920×800 px (or 1440×640) for best quality */}
         <img
           src="/images/hero-banner.png"
-          alt="ISHQARA Collection"
+          alt="The Ishqara Collection"
           className="w-full h-full object-cover"
+          width={1920}
+          height={800}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
+        {/* Dark overlay: stronger at bottom and on the left so white text stays readable on light backgrounds */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/25 to-transparent" />
         <div className="absolute inset-0 flex items-end pb-12 md:pb-16">
           <div className="max-w-7xl mx-auto px-4 w-full">
-            <div className="max-w-lg">
-              <Badge variant="outline" className="mb-4 bg-white/10 backdrop-blur border-white/20 text-white text-xs">
+            <div className="max-w-lg [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+              <Badge variant="outline" className="mb-4 bg-black/40 backdrop-blur border-white/30 text-white text-xs">
                 New Collection 2026
               </Badge>
               <h1 className="font-serif text-3xl md:text-5xl font-bold text-white mb-3 leading-tight" data-testid="text-hero-title">
-                Treat Yourself to Something Beautiful
+                Love, bottled. Meet Ishqara.
               </h1>
-              <p className="text-white/80 text-sm md:text-base mb-6 leading-relaxed">
-                Discover premium fragrances that make every day special. Starting at just Rs. 799.
+              <p className="text-white text-base md:text-lg font-serif italic mb-2">
+                Not just a perfume. A presence.
+              </p>
+              <p className="text-white text-sm md:text-base mb-6 leading-relaxed max-w-md">
+                Discover premium fragrances that make every day special. Starting at just Rs. 499.
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link href="/shop">
@@ -36,9 +44,9 @@ function HeroSection() {
                     Shop Now <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </Link>
-                <Link href="/bundles">
-                  <Button variant="outline" className="bg-white/10 backdrop-blur border-white/30 text-white" data-testid="button-gift-sets">
-                    Gift Sets
+                <Link href="/deals">
+                  <Button variant="outline" className="bg-white/10 backdrop-blur border-white/30 text-white" data-testid="button-inaugural-offer">
+                    Inaugural Offer
                   </Button>
                 </Link>
               </div>
@@ -134,26 +142,29 @@ function BundleCTA() {
             <div className="p-5 sm:p-8 md:p-12">
               <div className="flex items-center gap-2 mb-3">
                 <Gift className="w-5 h-5 text-primary" />
-                <span className="text-sm font-semibold text-primary uppercase tracking-wider">Gift Sets</span>
+                <span className="text-sm font-semibold text-primary uppercase tracking-wider">Inaugural Offer</span>
               </div>
               <h2 className="font-serif text-2xl md:text-3xl font-bold mb-3">
-                Build Your Own Bundle
+                Buy 2 Get 1 Free
               </h2>
-              <p className="text-muted-foreground text-sm md:text-base mb-6 leading-relaxed">
-                Pick 2 or 3 perfumes and get them in a premium gift box at a special price.
+              <p className="text-foreground text-sm md:text-base mb-6 leading-relaxed">
+                Pick 2 or 3 perfumes and get them at a special price.
                 Perfect for gifting or treating yourself.
               </p>
-              <Link href="/bundles">
-                <Button data-testid="button-build-bundle">
-                  Create Bundle <ArrowRight className="w-4 h-4 ml-1" />
+              <Link href="/deals">
+                <Button data-testid="button-inaugural-offer-cta">
+                  View Offer <ArrowRight className="w-4 h-4 ml-1" />
                 </Button>
               </Link>
             </div>
             <div className="hidden md:block p-4">
+              {/* Bundle/offer image: recommended 600×400 px */}
               <img
                 src="/images/bundle-gift.png"
-                alt="Gift Bundle"
+                alt="Ishqara Offer"
                 className="w-full max-w-sm mx-auto rounded-md"
+                width={600}
+                height={400}
               />
             </div>
           </div>
@@ -165,17 +176,16 @@ function BundleCTA() {
 
 function SizeGuide() {
   const sizes = [
-    { size: "30ml", desc: "Travel & Try", price: "Starting Rs. 799", icon: "Travel-friendly" },
-    { size: "50ml", desc: "Everyday Fav", price: "Starting Rs. 1,299", icon: "Best value" },
-    { size: "100ml", desc: "Full Experience", price: "Starting Rs. 1,999", icon: "Lasts longer" },
+    { size: "50ml", desc: "Everyday Fav", price: "Starting Rs. 499", icon: "Best value" },
+    { size: "100ml", desc: "Full Experience", price: "Starting Rs. 799", icon: "Lasts longer" },
   ];
 
   return (
     <section className="py-10 md:py-14 bg-card/50" data-testid="section-sizes">
       <div className="max-w-7xl mx-auto px-4 text-center">
         <h2 className="font-serif text-xl md:text-2xl font-bold mb-2">Find Your Perfect Size</h2>
-        <p className="text-sm text-muted-foreground mb-8">Every scent, every budget. Start small, go big.</p>
-        <div className="grid grid-cols-3 gap-3 md:gap-6 max-w-2xl mx-auto">
+        <p className="text-sm text-foreground mb-8">Every scent, every budget. Start small, go big.</p>
+        <div className="grid grid-cols-2 gap-3 md:gap-6 max-w-xl mx-auto">
           {sizes.map((s) => (
             <div key={s.size} className="p-4 md:p-6 rounded-md bg-background border text-center">
               <p className="font-serif text-2xl md:text-3xl font-bold text-primary mb-1">{s.size}</p>
@@ -229,8 +239,8 @@ export default function HomePage() {
   return (
     <div>
       <SEOHead
-        title="Premium Fragrances — Treat Yourself"
-        description="Discover luxury perfumes at ISHQARA. Shop authentic OG scents and recreation fragrances, gift bundles, and exclusive deals. Free shipping above Rs. 1499."
+        title="The Ishqara Collection — Premium Fragrances"
+        description="Experience Ishqara today: A scent that stays longer than words. Shop The Ishqara Collection & recreations. Free shipping above Rs. 1499."
         canonicalPath="/"
         jsonLd={[websiteSchema, orgSchema]}
       />

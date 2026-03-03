@@ -18,7 +18,6 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/shop", label: "Shop" },
   { href: "/deals", label: "Deals" },
-  { href: "/bundles", label: "Bundles" },
 ];
 
 export default function Navbar() {

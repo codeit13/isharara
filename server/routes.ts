@@ -282,7 +282,7 @@ export async function registerRoutes(
       "Rose Noir", "ISHQARA", "A dark floral scent with rose and oud",
       "Floral", "Rose,Oud,Musk", "/images/perfume-1.png",
       "women", "og", "false", "false", "false",
-      "30ml:799:999:50|50ml:1299:1599:30",
+      "50ml:499:599:30|100ml:799:999:20",
     ];
     const csv = [headers.join(","), example.map((v) => `"${v}"`).join(",")].join("\n");
     res.setHeader("Content-Type", "text/csv");

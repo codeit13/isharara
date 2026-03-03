@@ -62,7 +62,7 @@ export default function TermsPage() {
           <h2 className="font-semibold text-base text-foreground mt-4">6. Governing law</h2>
           <p>
             These Terms shall be governed by and construed in accordance with the laws of India. Any
-            disputes shall be subject to the exclusive jurisdiction of the courts at Uttarakhand,
+            disputes shall be subject to the exclusive jurisdiction of the courts at Mumbai, Maharashtra.
             India.
           </p>
 

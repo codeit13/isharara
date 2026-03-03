@@ -305,7 +305,7 @@ function CsvImportDialog() {
               <div>
                 <p className="text-sm font-semibold mb-0.5">Step 1 — Download the template</p>
                 <p className="text-xs text-muted-foreground">
-                  Fill it in and upload. Sizes format: <code className="bg-muted px-1 rounded text-[11px]">30ml:799:999:50|50ml:1299:1599:30</code>
+                  Fill it in and upload. Sizes format: <code className="bg-muted px-1 rounded text-[11px]">50ml:499:599:30|100ml:799:999:20</code>
                   <span className="block mt-0.5 opacity-70">size:price:mrp:stock, multiple sizes separated by |</span>
                 </p>
               </div>
@@ -488,7 +488,7 @@ function ProductsTab({ products }: { products: ProductWithSizes[] }) {
                     {product.isNewArrival && <Badge variant="outline" className="text-[10px] h-4 px-1.5">NEW</Badge>}
                     {lowStock && <Badge variant="destructive" className="text-[10px] h-4 px-1.5">Low Stock</Badge>}
                   </div>
-                  <p className="text-xs text-muted-foreground">{product.category} · {product.gender} · {(product as any).productType === "recreation" ? "Recreation" : "OG"}</p>
+                  <p className="text-xs text-muted-foreground">{product.category} · {product.gender} · {(product as any).productType === "recreation" ? "Recreation" : "The Ishqara Collection"}</p>
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                     {product.sizes.map((s) => (
                       <span key={s.size} className={`text-[10px] ${s.stock <= 5 ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
@@ -519,7 +519,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     notes: "", image: "/images/perfume-1.png", gender: "unisex",
     productType: "og",
     isBestseller: false, isTrending: false, isNewArrival: false,
-    sizes: [{ size: "30ml", price: 799, originalPrice: 0, stock: 50 }],
+    sizes: [{ size: "50ml", price: 499, originalPrice: 0, stock: 50 }],
   });
 
   const addMutation = useMutation({
@@ -550,7 +550,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   };
 
   const addSize = () => {
-    setForm({ ...form, sizes: [...form.sizes, { size: "50ml", price: 1299, originalPrice: 0, stock: 30 }] });
+    setForm({ ...form, sizes: [...form.sizes, { size: "50ml", price: 499, originalPrice: 0, stock: 30 }] });
   };
 
   return (
@@ -597,7 +597,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
               <Select value={form.productType} onValueChange={(v) => setForm({ ...form, productType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="og">OG (Original)</SelectItem>
+                  <SelectItem value="og">The Ishqara Collection</SelectItem>
                   <SelectItem value="recreation">Recreation</SelectItem>
                 </SelectContent>
               </Select>
@@ -613,7 +613,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="flex items-center justify-between"><Label className="text-xs font-semibold">Sizes & Pricing</Label><Button size="sm" variant="outline" onClick={addSize} type="button"><Plus className="w-3 h-3 mr-1" /> Size</Button></div>
           {form.sizes.map((s, i) => (
             <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="30ml" />
+              <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="50ml" />
               <Input type="number" value={s.price} onChange={(e) => updateSize(i, "price", Number(e.target.value))} placeholder="Price" />
               <Input type="number" value={s.originalPrice} onChange={(e) => updateSize(i, "originalPrice", Number(e.target.value))} placeholder="MRP" />
               <Input type="number" value={s.stock} onChange={(e) => updateSize(i, "stock", Number(e.target.value))} placeholder="Stock" />
@@ -722,7 +722,7 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
               <Select value={form.productType} onValueChange={(v) => setForm({ ...form, productType: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="og">OG (Original)</SelectItem>
+                  <SelectItem value="og">The Ishqara Collection</SelectItem>
                   <SelectItem value="recreation">Recreation</SelectItem>
                 </SelectContent>
               </Select>

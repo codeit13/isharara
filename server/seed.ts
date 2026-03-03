@@ -130,28 +130,21 @@ export async function seedDatabase() {
   for (const product of seedProducts) {
     const [created] = await db.insert(products).values(product).returning();
 
-    const basePrices: Record<string, { s30: number; s50: number; s100: number }> = {
-      "Velvet Rose": { s30: 899, s50: 1499, s100: 2299 },
-      "Golden Oud": { s30: 1199, s50: 1999, s100: 2999 },
-      "Lavender Dreams": { s30: 799, s50: 1299, s100: 1999 },
-      "Midnight Blue": { s30: 999, s50: 1599, s100: 2499 },
-      "Amber Elixir": { s30: 1099, s50: 1799, s100: 2799 },
-      "Citrus Garden": { s30: 799, s50: 1199, s100: 1899 },
-      "Pink Peony": { s30: 849, s50: 1399, s100: 2199 },
-      "Royal Saffron": { s30: 1299, s50: 2199, s100: 3499 },
+    const basePrices: Record<string, { s50: number; s100: number }> = {
+      "Velvet Rose": { s50: 499, s100: 799 },
+      "Golden Oud": { s50: 499, s100: 799 },
+      "Lavender Dreams": { s50: 499, s100: 799 },
+      "Midnight Blue": { s50: 499, s100: 799 },
+      "Amber Elixir": { s50: 499, s100: 799 },
+      "Citrus Garden": { s50: 499, s100: 799 },
+      "Pink Peony": { s50: 499, s100: 799 },
+      "Royal Saffron": { s50: 499, s100: 799 },
     };
 
-    const prices = basePrices[product.name] || { s30: 799, s50: 1299, s100: 1999 };
+    const prices = basePrices[product.name] || { s50: 499, s100: 799 };
     const hasDiscount = ["Velvet Rose", "Golden Oud", "Amber Elixir"].includes(product.name);
 
     await db.insert(productSizes).values([
-      {
-        productId: created.id,
-        size: "30ml",
-        price: prices.s30,
-        originalPrice: hasDiscount ? Math.round(prices.s30 * 1.2) : null,
-        stock: 45,
-      },
       {
         productId: created.id,
         size: "50ml",
@@ -208,7 +201,7 @@ export async function seedDatabase() {
     },
     {
       title: "Buy 2 Get 1 Free",
-      description: "Add 3 perfumes to cart, cheapest one is free",
+      description: "Buy 2 Get 1 Free",
       discountType: "bundle",
       discountValue: 100,
       code: "B2G1",

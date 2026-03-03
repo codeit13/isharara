@@ -9,8 +9,8 @@ export default function Footer() {
           <div className="md:col-span-1">
             <img src="/logo.png" alt="ISHQARA" className="h-12 w-auto object-contain mb-3" />
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Premium fragrances crafted for those who believe in treating themselves. 
-              Discover your signature scent.
+              Experience Ishqara today: A scent that stays longer than words.
+              Try it. Love it. Wear it.
             </p>
             <div className="flex gap-3 mt-4">
               <a href="https://www.instagram.com/ishqaraperfumes" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
@@ -27,7 +27,6 @@ export default function Footer() {
             <div className="flex flex-col gap-2">
               <Link href="/shop" className="text-sm text-muted-foreground">All Perfumes</Link>
               <Link href="/deals" className="text-sm text-muted-foreground">Deals & Offers</Link>
-              <Link href="/bundles" className="text-sm text-muted-foreground">Gift Bundles</Link>
             </div>
           </div>
 
