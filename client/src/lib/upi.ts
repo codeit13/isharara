@@ -27,7 +27,7 @@ const BRANDED_NOTES = [
 function getUpiNote(orderId: string | number): string {
   const idx = Number(orderId) % BRANDED_NOTES.length;
   const base = BRANDED_NOTES[Math.abs(idx)];
-  return `${base} Order ${orderId}`;
+  return `#${orderId} ${base}`;
 }
 
 /** Build the standard UPI payment URI (used for deep links and QR codes). */
@@ -74,6 +74,11 @@ export function buildAppUpiUrls(params: UpiParams): {
 
   return [
     {
+      label: "Cred",
+      icon: "https://upload.wikimedia.org/wikipedia/commons/9/9d/CRED-LOGO2.png",
+      url: `credupipay://pay?${qs}`,
+    },
+    {
       label: "PhonePe",
       icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/PhonePe_Logo.svg/1200px-PhonePe_Logo.svg.png",
       url: `phonepe://pay?${qs}`,
@@ -90,7 +95,7 @@ export function buildAppUpiUrls(params: UpiParams): {
     },
     {
       label: "BHIM",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e9/BHIM_logo.png/240px-BHIM_logo.png",
+      icon: "https://upload.wikimedia.org/wikipedia/commons/9/90/Bhim-logo.png",
       url: `bhim://pay?${qs}`,
     },
   ];

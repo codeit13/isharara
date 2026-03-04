@@ -34,18 +34,23 @@ export function useSettings() {
 
   const settings: AppSettings = { ...DEFAULTS, ...(data as Partial<AppSettings>) };
 
+  const numOr = (val: string, fallback: number) => {
+    const n = Number(val);
+    return Number.isNaN(n) ? fallback : n;
+  };
+
   return {
     settings,
     isLoading,
-    shippingFee: Number(settings.shipping_fee) || 99,
-    freeShippingThreshold: Number(settings.free_shipping_threshold) || 1499,
+    shippingFee: numOr(settings.shipping_fee, 99),
+    freeShippingThreshold: numOr(settings.free_shipping_threshold, 1499),
     upiId: settings.upi_id || (import.meta.env.VITE_UPI_ID as string | undefined) || "",
     upiBusinessName: settings.upi_business_name || (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) || "ISHQARA",
     storeName: settings.store_name || "ISHQARA",
     storeEmail: settings.store_email,
     storePhone: settings.store_phone,
     codEnabled: settings.cod_enabled === "true",
-    minOrderAmount: Number(settings.min_order_amount) || 0,
+    minOrderAmount: numOr(settings.min_order_amount, 0),
     razorpayEnabled: settings.razorpay_enabled === "true",
   };
 }
