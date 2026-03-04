@@ -25,11 +25,11 @@ function HeroSection() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/25 to-transparent" />
         <div className="absolute inset-0 flex items-end pb-12 md:pb-16">
           <div className="max-w-7xl mx-auto px-4 w-full">
-            <div className="max-w-lg [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
+            <div className="max-w-2xl [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
               <Badge variant="outline" className="mb-4 bg-black/40 backdrop-blur border-white/30 text-white text-xs">
                 New Collection 2026
               </Badge>
-              <h1 className="font-serif text-3xl md:text-5xl font-bold text-white mb-3 leading-tight" data-testid="text-hero-title">
+              <h1 className="font-serif text-3xl md:text-5xl font-bold text-white mb-3 leading-tight md:whitespace-nowrap" data-testid="text-hero-title">
                 Love, bottled. Meet Ishqara.
               </h1>
               <p className="text-white text-base md:text-lg font-serif italic mb-2">

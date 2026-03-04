@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, ExternalLink, ShoppingBag, ChevronUp, ChevronDown } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, ExternalLink, ShoppingBag, ChevronUp, ChevronDown, Copy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +14,7 @@ import { useSettings } from "@/hooks/use-settings";
 import SEOHead from "@/components/SEOHead";
 import { loadRazorpay } from "@/lib/razorpay";
 import {
-  buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi,
+  buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi, getUpiNote,
 } from "@/lib/upi";
 import { QRCodeSVG } from "qrcode.react";
 import type { Order, Promotion, Address } from "@shared/schema";
@@ -269,17 +269,18 @@ export default function CheckoutPage() {
     const device   = detectDevice();
 
     return (
-      <div className="max-w-lg mx-auto px-4 py-12 text-center">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
-          <Smartphone className="w-8 h-8 text-primary" />
-        </div>
-        <h1 className="font-serif text-2xl font-bold mb-1">Complete your payment</h1>
-        <p className="text-sm text-muted-foreground mb-2">Order #{upiOrderId} · Rs. {upiAmount.toLocaleString()}</p>
-        <p className="text-xs text-muted-foreground mb-6">
-          Pay <strong>Rs. {upiAmount.toLocaleString()}</strong> to <strong>{bizName}</strong>
-        </p>
+      <div className="min-h-screen pb-28 md:pb-24">
+        <div className="max-w-lg mx-auto px-4 py-12 text-center">
+          <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-4">
+            <Smartphone className="w-8 h-8 text-primary" />
+          </div>
+          <h1 className="font-serif text-2xl font-bold mb-1">Complete your payment</h1>
+          <p className="text-sm text-muted-foreground mb-2">Order #{upiOrderId} · Rs. {upiAmount.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mb-6">
+            Pay <strong>Rs. {upiAmount.toLocaleString()}</strong> to <strong>{bizName}</strong>
+          </p>
 
-        {/* Android: one-tap open any UPI app */}
+          {/* Android: one-tap open any UPI app */}
         {device === "android" && upiUrl && (
           <a
             href={upiUrl}
@@ -289,21 +290,23 @@ export default function CheckoutPage() {
           </a>
         )}
 
-        {/* iOS: per-app buttons */}
+        {/* iOS: per-app buttons — 2 per row */}
         {device === "ios" && (
-          <div className="space-y-2 mb-4 max-w-xs mx-auto">
+          <div className="mb-4 max-w-sm mx-auto">
             <p className="text-xs text-muted-foreground mb-2">Choose your UPI app</p>
-            {appUrls.map((app) => (
-              <a
-                key={app.label}
-                href={app.url}
-                className="flex items-center gap-3 w-full p-3 rounded-md border hover:bg-muted transition-colors text-sm font-medium"
-              >
-                <img src={app.icon} alt={app.label} className="w-6 h-6 object-contain rounded" />
-                {app.label}
-                <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground" />
-              </a>
-            ))}
+            <div className="grid grid-cols-2 gap-2">
+              {appUrls.map((app) => (
+                <a
+                  key={app.label}
+                  href={app.url}
+                  className="flex items-center gap-2 p-3 rounded-md border hover:bg-muted transition-colors text-sm font-medium"
+                >
+                  <img src={app.icon} alt={app.label} className="w-8 h-8 object-contain rounded shrink-0" />
+                  <span className="truncate">{app.label}</span>
+                  <ExternalLink className="w-3 h-3 ml-auto text-muted-foreground shrink-0" />
+                </a>
+              ))}
+            </div>
           </div>
         )}
 
@@ -361,30 +364,95 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        <Separator className="my-5 max-w-xs mx-auto" />
-        <p className="text-xs text-muted-foreground mb-4">
-          After completing the payment in your UPI app, tap the button below to confirm your order.
-        </p>
-        <Button
-          className="w-full max-w-xs mx-auto"
-          onClick={() => {
-            clearCart();
-            setUpiState("confirmed");
-            setOrderPlaced(true);
-            setPlacedOrderId(upiOrderId);
-          }}
-        >
-          <CheckCircle2 className="w-4 h-4 mr-2" /> I've completed the payment
-        </Button>
-        <p className="text-xs text-muted-foreground mt-4">
-          Haven't paid yet?{" "}
-          <button
-            className="text-primary underline underline-offset-2"
-            onClick={() => { setUpiState("idle"); setUpiOrderId(null); }}
-          >
-            Go back
-          </button>
-        </p>
+        {/* Manual payment fallback — unified, intuitive design */}
+        {upiId && (
+          <div className="mb-6 max-w-sm mx-auto text-left">
+            <p className="text-xs text-muted-foreground mb-3 text-center">
+              Or pay manually using the details below
+            </p>
+            <div className="rounded-xl border bg-card shadow-sm overflow-hidden divide-y divide-border">
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-0.5">Pay to</p>
+                  <p className="font-mono text-sm font-semibold truncate">{upiId}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(upiId);
+                    toast({ title: "UPI ID copied" });
+                  }}
+                  title="Copy"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              <div className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground mb-0.5">Amount</p>
+                  <p className="text-base font-bold text-primary">Rs. {upiAmount.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="px-4 py-3 bg-muted/30">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs text-muted-foreground mb-0.5">Add in payment description</p>
+                    <p className="text-sm font-semibold break-words">{getUpiNote(upiOrderId)}</p>
+                    <p className="flex items-center gap-1.5 text-[11px] text-amber-700 dark:text-amber-400 font-medium mt-1.5">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      Important: Add this in your UPI app to match your payment
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 h-8 w-8 text-muted-foreground hover:text-foreground mt-1"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(getUpiNote(upiOrderId));
+                      toast({ title: "Copied" });
+                    }}
+                    title="Copy"
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+          <p className="text-xs text-muted-foreground text-center max-w-xs mx-auto">
+            Once paid, tap the button at the bottom to confirm your order.
+          </p>
+        </div>
+
+        {/* Fixed bottom bar */}
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-background/98 backdrop-blur-sm border-t shadow-[0_-4px_12px_rgba(0,0,0,0.08)] px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="max-w-lg mx-auto flex flex-col gap-3">
+            <Button
+              className="w-full"
+              onClick={() => {
+                clearCart();
+                setUpiState("confirmed");
+                setOrderPlaced(true);
+                setPlacedOrderId(upiOrderId);
+              }}
+            >
+              <CheckCircle2 className="w-4 h-4 mr-2" /> I&apos;ve completed the payment
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Haven&apos;t paid yet?{" "}
+              <button
+                className="text-primary underline underline-offset-2"
+                onClick={() => { setUpiState("idle"); setUpiOrderId(null); }}
+              >
+                Go back
+              </button>
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

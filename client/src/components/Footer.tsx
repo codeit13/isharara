@@ -13,6 +13,7 @@ export default function Footer() {
             <img src="/logo.png" alt="ISHQARA" className="h-12 w-auto object-contain mb-3" />
             <p className="text-sm text-muted-foreground leading-relaxed">
               Experience Ishqara today: A scent that stays longer than words.
+              <br />
               Try it. Love it. Wear it.
             </p>
             <div className="flex gap-3 mt-4">

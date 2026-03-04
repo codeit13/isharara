@@ -28,7 +28,8 @@ const BRANDED_NOTES = [
   "Your next obsession, sealed with a scent ISHQARA",
 ];
 
-function getUpiNote(orderId: string | number): string {
+/** Returns the transaction note (tn) used in UPI intent URLs. Export for UI display. */
+export function getUpiNote(orderId: string | number): string {
   const idx = Number(orderId) % BRANDED_NOTES.length;
   const base = BRANDED_NOTES[Math.abs(idx)];
   return `#${orderId} ${base}`;
@@ -41,7 +42,7 @@ export function buildUpiUrl(params: UpiParams): string {
 
   if (!upiId) return "";
 
-  const note = params.note ?? getUpiNote(params.orderId);
+  const note = params.note ?? getUpiNote(params.orderId); // tn = transaction note in UPI
   const isMerchant = params.merchantMode === true;
   const mc = (params.merchantCode || "5999").replace(/\D/g, "").slice(0, 4) || "5999";
 
