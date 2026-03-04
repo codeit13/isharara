@@ -10,6 +10,7 @@ export type AppSettings = {
   upi_business_name: string;
   cod_enabled: string;
   min_order_amount: string;
+  razorpay_enabled: string;
 };
 
 const DEFAULTS: AppSettings = {
@@ -17,11 +18,12 @@ const DEFAULTS: AppSettings = {
   free_shipping_threshold: "1499",
   store_name: "ISHQARA",
   store_email: "ishqaraperfumes@gmail.com",
-  store_phone: "+91 98679 02305",
+  store_phone: "+919867902305",
   upi_id: "",
   upi_business_name: "ISHQARA",
   cod_enabled: "false",
   min_order_amount: "0",
+  razorpay_enabled: "true",
 };
 
 export function useSettings() {
@@ -44,5 +46,6 @@ export function useSettings() {
     storePhone: settings.store_phone,
     codEnabled: settings.cod_enabled === "true",
     minOrderAmount: Number(settings.min_order_amount) || 0,
+    razorpayEnabled: settings.razorpay_enabled === "true",
   };
 }

@@ -1,17 +1,14 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import SEOHead from "@/components/SEOHead";
 import { Star, ShoppingBag, Minus, Plus, ArrowLeft, Truck, RotateCcw, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { ProductWithSizes, Review } from "@shared/schema";
 
 function StarRating({ rating, onChange, interactive = false }: { rating: number; onChange?: (r: number) => void; interactive?: boolean }) {
@@ -34,9 +31,6 @@ export default function ProductPage() {
   const { toast } = useToast();
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
-  const [reviewName, setReviewName] = useState("");
-  const [reviewComment, setReviewComment] = useState("");
-  const [reviewRating, setReviewRating] = useState(5);
 
   const { data: product, isLoading } = useQuery<ProductWithSizes>({
     queryKey: ["/api/products", id],
@@ -44,29 +38,6 @@ export default function ProductPage() {
 
   const { data: reviews } = useQuery<Review[]>({
     queryKey: ["/api/products", id, "reviews"],
-  });
-
-  const addReviewMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", `/api/products/${id}/reviews`, {
-        productId: Number(id),
-        customerName: reviewName,
-        rating: reviewRating,
-        comment: reviewComment,
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products", id, "reviews"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products", id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
-      setReviewName("");
-      setReviewComment("");
-      setReviewRating(5);
-      toast({ title: "Review submitted!", description: "Thank you for your feedback" });
-    },
-    onError: () => {
-      toast({ title: "Failed to submit review", variant: "destructive" });
-    },
   });
 
   if (isLoading) {
@@ -302,41 +273,9 @@ export default function ProductPage() {
 
       <Separator className="my-10" />
 
-      <div className="max-w-3xl" data-testid="section-reviews">
-        <h2 className="font-serif text-xl font-bold mb-6">Reviews ({reviews?.length || 0})</h2>
-
-        <div className="mb-8 p-5 rounded-md bg-card border">
-          <h3 className="text-sm font-semibold mb-3">Write a Review</h3>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">Rating:</span>
-              <StarRating rating={reviewRating} onChange={setReviewRating} interactive />
-            </div>
-            <Input
-              placeholder="Your name"
-              value={reviewName}
-              onChange={(e) => setReviewName(e.target.value)}
-              data-testid="input-review-name"
-            />
-            <Textarea
-              placeholder="Share your experience..."
-              value={reviewComment}
-              onChange={(e) => setReviewComment(e.target.value)}
-              className="resize-none"
-              data-testid="input-review-comment"
-            />
-            <Button
-              className="w-full sm:w-auto"
-              disabled={!reviewName || !reviewComment || addReviewMutation.isPending}
-              onClick={() => addReviewMutation.mutate()}
-              data-testid="button-submit-review"
-            >
-              {addReviewMutation.isPending ? "Submitting..." : "Submit Review"}
-            </Button>
-          </div>
-        </div>
-
-        {reviews && reviews.length > 0 ? (
+      {reviews && reviews.length > 0 && (
+        <div className="max-w-3xl" data-testid="section-reviews">
+          <h2 className="font-serif text-xl font-bold mb-6">Reviews ({reviews.length})</h2>
           <div className="space-y-4">
             {reviews.map((review) => (
               <div key={review.id} className="p-4 rounded-md border" data-testid={`review-${review.id}`}>
@@ -358,10 +297,8 @@ export default function ProductPage() {
               </div>
             ))}
           </div>
-        ) : (
-          <p className="text-sm text-muted-foreground text-center py-8">No reviews yet. Be the first to review!</p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

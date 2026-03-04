@@ -7,6 +7,7 @@ export async function seedDatabase() {
   const existingProducts = await db.select().from(products);
   if (existingProducts.length > 0) {
     await ensureDemoUser();
+    await ensureB2G1PromoDescription();
     return;
   }
 
@@ -219,7 +220,15 @@ export async function seedDatabase() {
 
   await ensureDemoUser();
   await ensureAdminUser();
+  await ensureB2G1PromoDescription();
   console.log("Database seeded successfully!");
+}
+
+async function ensureB2G1PromoDescription() {
+  const [b2g1] = await db.select().from(promotions).where(eq(promotions.code, "B2G1"));
+  if (b2g1 && b2g1.description !== "Buy 2 Get 1 Free") {
+    await db.update(promotions).set({ title: "Buy 2 Get 1 Free", description: "Buy 2 Get 1 Free" }).where(eq(promotions.code, "B2G1"));
+  }
 }
 
 async function ensureAdminUser() {

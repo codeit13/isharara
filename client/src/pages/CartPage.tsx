@@ -172,7 +172,9 @@ export default function CartPage() {
       </h1>
 
       {/* Free shipping progress bar */}
-      <ShippingProgress total={totalPrice} threshold={freeShippingThreshold} fee={shippingFee} />
+      {shippingFee > 0 && (
+        <ShippingProgress total={totalPrice} threshold={freeShippingThreshold} fee={shippingFee} />
+      )}
 
       <div className="grid md:grid-cols-3 gap-4 md:gap-8">
         {/* ── Cart items ── */}

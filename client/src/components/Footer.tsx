@@ -1,7 +1,10 @@
 import { Link } from "wouter";
 import { SiInstagram, SiWhatsapp } from "react-icons/si";
+import { useSettings } from "@/hooks/use-settings";
 
 export default function Footer() {
+  const { upiId, storePhone, codEnabled, razorpayEnabled } = useSettings();
+  const whatsappNumber = storePhone?.replace(/\D/g, "") || "919867902305";
   return (
     <footer className="border-t bg-card/50 mt-16" data-testid="footer">
       <div className="max-w-7xl mx-auto px-4 py-12">
@@ -16,7 +19,7 @@ export default function Footer() {
               <a href="https://www.instagram.com/ishqaraperfumes" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Instagram">
                 <SiInstagram className="w-5 h-5" />
               </a>
-              <a href="https://wa.me/919867902305" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="WhatsApp">
+              <a href={`https://wa.me/${whatsappNumber}`} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="WhatsApp">
                 <SiWhatsapp className="w-5 h-5" />
               </a>
             </div>
@@ -41,7 +44,15 @@ export default function Footer() {
 
           <div>
             <h4 className="font-semibold text-sm mb-3">Payments</h4>
-            <p className="text-sm text-muted-foreground mb-2">We accept COD & online payments via Razorpay</p>
+            <p className="text-sm text-muted-foreground mb-2">
+              {codEnabled && razorpayEnabled
+                ? "We accept COD & online payments via Razorpay"
+                : codEnabled
+                ? "We accept Cash on Delivery"
+                : razorpayEnabled
+                ? "We accept online payments via Razorpay"
+                : "We accept prepaid orders via UPI"}
+            </p>
             <p className="text-sm text-muted-foreground">Free shipping on orders above Rs. 1,499</p>
           </div>
         </div>

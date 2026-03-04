@@ -933,7 +933,7 @@ function SettingsTab() {
     { group: "Shipping",        keys: ["shipping_fee", "free_shipping_threshold", "min_order_amount"] },
     { group: "Store Info",      keys: ["store_name", "store_email", "store_phone"] },
     { group: "UPI Payments",    keys: ["upi_id", "upi_business_name"] },
-    { group: "Feature Flags",   keys: ["cod_enabled"] },
+    { group: "Feature Flags",   keys: ["cod_enabled", "razorpay_enabled"] },
   ];
 
   const rowByKey = Object.fromEntries((rows || []).map((r) => [r.key, r]));

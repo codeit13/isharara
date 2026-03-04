@@ -37,8 +37,9 @@ export default function Navbar() {
     <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b" data-testid="navbar">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 h-16 relative">
 
-        {/* Hamburger — mobile only */}
-        <div className="flex items-center gap-2 md:hidden z-10">
+        {/* Left group: hamburger + logo on mobile; logo only on desktop — stays left */}
+        <div className="flex items-center gap-2 md:gap-4 justify-start">
+        <div className="flex items-center gap-2 md:hidden z-10 shrink-0">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
               <Button size="icon" variant="ghost" data-testid="button-mobile-menu">
@@ -105,8 +106,8 @@ export default function Navbar() {
           </Sheet>
         </div>
 
-        {/* Logo — absolutely centered on mobile, static on desktop */}
-        <Link href="/" className="absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0">
+        {/* Logo — left-aligned on mobile (next to hamburger) */}
+        <Link href="/" className="shrink-0">
           <img
             src="/logo.png"
             alt="ISHQARA"
@@ -114,6 +115,7 @@ export default function Navbar() {
             data-testid="link-logo"
           />
         </Link>
+        </div>
 
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (

@@ -27,7 +27,7 @@ export default function CheckoutPage() {
   const {
     shippingFee, freeShippingThreshold,
     upiId: settingsUpiId, upiBusinessName: settingsUpiName,
-    storeName, codEnabled, minOrderAmount,
+    storeName, codEnabled, minOrderAmount, razorpayEnabled,
   } = useSettings();
   const [paymentMethod, setPaymentMethod] = useState("upi");
   const [orderPlaced, setOrderPlaced] = useState(false);
@@ -83,6 +83,12 @@ export default function CheckoutPage() {
     }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, addresses]);
+
+  useEffect(() => {
+    if (!razorpayEnabled && paymentMethod === "razorpay") {
+      setPaymentMethod("upi");
+    }
+  }, [razorpayEnabled, paymentMethod]);
 
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
 
@@ -545,19 +551,21 @@ export default function CheckoutPage() {
                   <p className="text-xs text-muted-foreground truncate">PhonePe, GPay, Paytm</p>
                 </div>
               </button>
-              <button
-                className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left min-h-[72px] ${
-                  paymentMethod === "razorpay" ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 active:scale-[0.99]"
-                }`}
-                onClick={() => setPaymentMethod("razorpay")}
-                data-testid="button-payment-razorpay"
-              >
-                <CreditCard className="w-6 h-6 text-muted-foreground flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">Card / Net Banking</p>
-                  <p className="text-xs text-muted-foreground truncate">Razorpay</p>
-                </div>
-              </button>
+              {razorpayEnabled && (
+                <button
+                  className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left min-h-[72px] ${
+                    paymentMethod === "razorpay" ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 active:scale-[0.99]"
+                  }`}
+                  onClick={() => setPaymentMethod("razorpay")}
+                  data-testid="button-payment-razorpay"
+                >
+                  <CreditCard className="w-6 h-6 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Card / Net Banking</p>
+                    <p className="text-xs text-muted-foreground truncate">Razorpay</p>
+                  </div>
+                </button>
+              )}
               {codEnabled && (
                 <button
                   className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left min-h-[72px] ${

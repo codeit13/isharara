@@ -120,7 +120,8 @@ export async function registerRoutes(
       }
 
       if (data.paymentMethod === "razorpay") {
-        if (!isRazorpayConfigured()) {
+        const razorpayEnabled = (await storage.getSetting("razorpay_enabled")) !== "false";
+        if (!razorpayEnabled || !isRazorpayConfigured()) {
           return res.status(503).json({ message: "Online payment is temporarily unavailable" });
         }
         const amountPaise = Math.round(data.total * 100);

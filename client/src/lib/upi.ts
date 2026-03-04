@@ -9,23 +9,25 @@ export interface UpiParams {
 }
 
 /**
- * Branded UPI transaction notes — each ≤ 80 chars (NPCI limit).
+ * Branded UPI transaction notes - each base string stays under 80 chars with orderId appended.
+ * Alphanumeric, spaces and periods only (no special characters for UPI compatibility).
  * Rotated deterministically by order ID so the same order always sees the same note.
  */
 const BRANDED_NOTES = [
-  "Your signature scent is on its way — ISHQARA",
-  "Crafted for those who wear their mood — ISHQARA",
-  "Luxury fragrance, delivered with love — ISHQARA",
-  "One spritz to remember — ISHQARA",
-  "You just made the room more interesting — ISHQARA",
-  "Fragrance that tells your story — ISHQARA",
-  "Bold. Elegant. Unapologetically you — ISHQARA",
-  "Your next obsession, sealed with a scent — ISHQARA",
+  "Your signature scent is on its way ISHQARA",
+  "Crafted for those who wear their mood ISHQARA",
+  "Luxury fragrance, delivered with love ISHQARA",
+  "One spritz to remember ISHQARA",
+  "You just made the room more interesting ISHQARA",
+  "Fragrance that tells your story ISHQARA",
+  "Bold. Elegant. Unapologetically you ISHQARA",
+  "Your next obsession, sealed with a scent ISHQARA",
 ];
 
-function getBrandedNote(orderId: string | number): string {
+function getUpiNote(orderId: string | number): string {
   const idx = Number(orderId) % BRANDED_NOTES.length;
-  return BRANDED_NOTES[Math.abs(idx)];
+  const base = BRANDED_NOTES[Math.abs(idx)];
+  return `${base} Order ${orderId}`;
 }
 
 /** Build the standard UPI payment URI (used for deep links and QR codes). */
@@ -35,7 +37,7 @@ export function buildUpiUrl(params: UpiParams): string {
 
   if (!upiId) return "";
 
-  const note = params.note ?? getBrandedNote(params.orderId);
+  const note = params.note ?? getUpiNote(params.orderId);
 
   // URLSearchParams encodes spaces as '+'; UPI apps expect '%20' — use manual encoding
   const parts = [

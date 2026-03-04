@@ -285,6 +285,7 @@ export class DatabaseStorage implements IStorage {
       { key: "upi_business_name",       value: "ISHQARA",                   label: "UPI Business Name",             description: "Name shown in UPI payment screens",             type: "string" },
       { key: "cod_enabled",             value: "false",                     label: "Cash on Delivery",              description: "Enable or disable Cash on Delivery option",     type: "boolean" },
       { key: "min_order_amount",        value: "0",                         label: "Minimum Order Amount (₹)",      description: "Minimum cart value required to place an order",  type: "number" },
+      { key: "razorpay_enabled",        value: "true",                      label: "Pay via Razorpay",              description: "Show Card / Net Banking (Razorpay) option at checkout", type: "boolean" },
     ];
     for (const d of defaults) {
       await db
