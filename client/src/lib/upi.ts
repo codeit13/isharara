@@ -6,6 +6,10 @@ export interface UpiParams {
   upiId?: string;
   /** Override from DB settings; falls back to VITE_UPI_BUSINESS_NAME env var */
   businessName?: string;
+  /** When true: add mc + mode=02 (merchant). When false: mode=01, omit mc (personal P2P). */
+  merchantMode?: boolean;
+  /** 4-digit MCC for merchant mode only; e.g. 5999, 5411 */
+  merchantCode?: string;
 }
 
 /**
@@ -38,8 +42,11 @@ export function buildUpiUrl(params: UpiParams): string {
   if (!upiId) return "";
 
   const note = params.note ?? getUpiNote(params.orderId);
+  const isMerchant = params.merchantMode === true;
+  const mc = (params.merchantCode || "5999").replace(/\D/g, "").slice(0, 4) || "5999";
 
   // URLSearchParams encodes spaces as '+'; UPI apps expect '%20' — use manual encoding
+  // Merchant: mc + mode=02. Personal: mode=01, omit mc.
   const parts = [
     `pa=${encodeURIComponent(upiId)}`,
     `pn=${encodeURIComponent(name)}`,
@@ -47,7 +54,9 @@ export function buildUpiUrl(params: UpiParams): string {
     `cu=INR`,
     `tr=${encodeURIComponent(`ISHQARA-${params.orderId}`)}`,
     `tn=${encodeURIComponent(note)}`,
+    `mode=${isMerchant ? "02" : "01"}`,
   ];
+  if (isMerchant) parts.push(`mc=${encodeURIComponent(mc)}`);
 
   return `upi://pay?${parts.join("&")}`;
 }

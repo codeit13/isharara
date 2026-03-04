@@ -26,7 +26,7 @@ export default function CheckoutPage() {
   const { user } = useAuth();
   const {
     shippingFee, freeShippingThreshold,
-    upiId: settingsUpiId, upiBusinessName: settingsUpiName,
+    upiId: settingsUpiId, upiBusinessName: settingsUpiName, upiMerchantMode: settingsMerchantMode, upiMerchantCode: settingsMerchantCode,
     storeName, codEnabled, minOrderAmount, razorpayEnabled,
   } = useSettings();
   const [paymentMethod, setPaymentMethod] = useState("upi");
@@ -236,7 +236,7 @@ export default function CheckoutPage() {
         setUpiState("pending");
         setIsSubmitting(false);
         // Trigger the intent (device-specific)
-        const upiUrl = buildUpiUrl({ amount: finalAmount, orderId: order.id, upiId: settingsUpiId, businessName: settingsUpiName });
+        const upiUrl = buildUpiUrl({ amount: finalAmount, orderId: order.id, upiId: settingsUpiId, businessName: settingsUpiName, merchantMode: settingsMerchantMode, merchantCode: settingsMerchantCode });
         const device = detectDevice();
         if (device === "android" && upiUrl) {
           triggerAndroidUpi(upiUrl);
@@ -263,8 +263,9 @@ export default function CheckoutPage() {
   if (upiState === "pending" && upiOrderId) {
     const upiId    = settingsUpiId || (import.meta.env.VITE_UPI_ID as string | undefined) || "";
     const bizName  = settingsUpiName || (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) || "ISHQARA";
-    const upiUrl   = buildUpiUrl({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName });
-    const appUrls  = buildAppUpiUrls({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName });
+    const mc       = settingsMerchantCode;
+    const upiUrl   = buildUpiUrl({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName, merchantMode: settingsMerchantMode, merchantCode: mc });
+    const appUrls  = buildAppUpiUrls({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName, merchantMode: settingsMerchantMode, merchantCode: mc });
     const device   = detectDevice();
 
     return (
@@ -315,7 +316,7 @@ export default function CheckoutPage() {
                 <div className="flex justify-center">
                   <div className="p-3 rounded-xl border bg-white shadow-sm inline-block">
                     <QRCodeSVG
-                      value={buildUpiQrValue({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName })}
+                      value={buildUpiQrValue({ amount: upiAmount, orderId: upiOrderId, upiId, businessName: bizName, merchantMode: settingsMerchantMode, merchantCode: mc })}
                       size={200}
                       level="M"
                       includeMargin={false}

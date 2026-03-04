@@ -932,7 +932,7 @@ function SettingsTab() {
   const settingsByGroup: { group: string; keys: string[] }[] = [
     { group: "Shipping",        keys: ["shipping_fee", "free_shipping_threshold", "min_order_amount"] },
     { group: "Store Info",      keys: ["store_name", "store_email", "store_phone"] },
-    { group: "UPI Payments",    keys: ["upi_id", "upi_business_name"] },
+    { group: "UPI Payments",    keys: ["upi_business_name", "upi_merchant_mode", "upi_id", "upi_merchant_code"] },
     { group: "Feature Flags",   keys: ["cod_enabled", "razorpay_enabled"] },
   ];
 
@@ -966,7 +966,11 @@ function SettingsTab() {
                             checked={val === "true"}
                             onCheckedChange={(v) => setDraft((d) => ({ ...d, [key]: v ? "true" : "false" }))}
                           />
-                          <span className="text-xs text-muted-foreground">{val === "true" ? "Enabled" : "Disabled"}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {key === "upi_merchant_mode"
+                              ? (val === "true" ? "Merchant UPI ID" : "Personal UPI ID")
+                              : (val === "true" ? "Enabled" : "Disabled")}
+                          </span>
                         </div>
                       ) : (
                         <Input

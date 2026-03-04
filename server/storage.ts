@@ -281,8 +281,10 @@ export class DatabaseStorage implements IStorage {
       { key: "store_name",              value: "ISHQARA",                   label: "Store Name",                    description: "Displayed across the site and in UPI payments", type: "string" },
       { key: "store_email",             value: "ishqaraperfumes@gmail.com", label: "Support Email",                 description: "Contact / support email",                       type: "string" },
       { key: "store_phone",             value: "+91 98679 02305",           label: "Support Phone",                 description: "WhatsApp / support phone number",               type: "string" },
-      { key: "upi_id",                  value: "",                          label: "UPI ID",                        description: "Business UPI VPA e.g. ishqara@upi",             type: "string" },
       { key: "upi_business_name",       value: "ISHQARA",                   label: "UPI Business Name",             description: "Name shown in UPI payment screens",             type: "string" },
+      { key: "upi_merchant_mode",       value: "false",                     label: "UPI ID Type",                 description: "Personal UPI ID, Merchant UPI ID", type: "boolean" },
+      { key: "upi_id",                  value: "",                          label: "UPI ID",                        description: "Business UPI VPA e.g. ishqara@upi",             type: "string" },
+      { key: "upi_merchant_code",       value: "5999",                      label: "UPI Merchant Code (MCC)",       description: "4-digit MCC for merchant mode only (Only enter if UPI is a merchant VPA)", type: "string" },
       { key: "cod_enabled",             value: "false",                     label: "Cash on Delivery",              description: "Enable or disable Cash on Delivery option",     type: "boolean" },
       { key: "min_order_amount",        value: "0",                         label: "Minimum Order Amount (₹)",      description: "Minimum cart value required to place an order",  type: "number" },
       { key: "razorpay_enabled",        value: "true",                      label: "Pay via Razorpay",              description: "Show Card / Net Banking (Razorpay) option at checkout", type: "boolean" },
@@ -291,7 +293,10 @@ export class DatabaseStorage implements IStorage {
       await db
         .insert(settings)
         .values({ ...d, updatedAt: new Date() })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: settings.key,
+          set: { label: d.label, description: d.description ?? null, type: d.type, updatedAt: new Date() },
+        });
     }
   }
 }
