@@ -3,7 +3,7 @@ import { SiInstagram, SiWhatsapp } from "react-icons/si";
 import { useSettings } from "@/hooks/use-settings";
 
 export default function Footer() {
-  const { upiId, storePhone, codEnabled, razorpayEnabled } = useSettings();
+  const { upiId, storePhone, codEnabled, razorpayEnabled, freeShippingThreshold } = useSettings();
   const whatsappNumber = storePhone?.replace(/\D/g, "") || "919867902305";
   return (
     <footer className="border-t bg-card/50 mt-16" data-testid="footer">
@@ -54,7 +54,11 @@ export default function Footer() {
                 ? "We accept online payments via Razorpay"
                 : "We accept prepaid orders via UPI"}
             </p>
-            <p className="text-sm text-muted-foreground">Free shipping on orders above Rs. 1,499</p>
+            <p className="text-sm text-muted-foreground">
+              {freeShippingThreshold > 0
+                ? `Free shipping on orders above Rs. ${freeShippingThreshold.toLocaleString()}`
+                : "Free shipping on all orders"}
+            </p>
           </div>
         </div>
 
