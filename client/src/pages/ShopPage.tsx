@@ -9,10 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/ProductCard";
 import type { ProductWithSizes } from "@shared/schema";
 
-const categories = ["All", "Floral", "Oriental", "Woody", "Fresh", "Citrus"];
-const genders = ["All", "Women", "Men", "Unisex"];
-const productTypes = ["All", "The Ishqara Collection", "Recreations"];
-
 function FilterPill({
   label,
   active,
@@ -54,6 +50,13 @@ export default function ShopPage() {
   const { data: products, isLoading } = useQuery<ProductWithSizes[]>({
     queryKey: ["/api/products"],
   });
+  const { data: shopFilters } = useQuery<{ categories: string[]; genders: string[]; productTypes: string[] }>({
+    queryKey: ["/api/shop-filters"],
+  });
+
+  const categories = ["All", ...(shopFilters?.categories ?? [])];
+  const genders = ["All", ...(shopFilters?.genders ?? [])];
+  const productTypes = ["All", ...(shopFilters?.productTypes ?? [])];
 
   let filtered = products || [];
 
@@ -61,10 +64,14 @@ export default function ShopPage() {
   else if (activeFilter === "trending") filtered = filtered.filter((p) => p.isTrending);
   else if (activeFilter === "new") filtered = filtered.filter((p) => p.isNewArrival);
 
-  if (category !== "All") filtered = filtered.filter((p) => p.category === category);
-  if (gender !== "All") filtered = filtered.filter((p) => p.gender.toLowerCase() === gender.toLowerCase());
-  if (productType === "The Ishqara Collection") filtered = filtered.filter((p) => (p as any).productType === "og");
-  else if (productType === "Recreations") filtered = filtered.filter((p) => (p as any).productType === "recreation");
+  if (category !== "All") {
+    filtered = filtered.filter((p) => {
+      const cats = (p.category || "").split(",").map((c) => c.trim()).filter(Boolean);
+      return cats.includes(category);
+    });
+  }
+  if (gender !== "All") filtered = filtered.filter((p) => (p.gender || "").toLowerCase() === gender.toLowerCase());
+  if (productType !== "All") filtered = filtered.filter((p) => ((p as any).productType || "").toLowerCase() === productType.toLowerCase());
 
   if (sortBy === "price-low") {
     filtered = [...filtered].sort((a, b) => Math.min(...a.sizes.map((s) => s.price)) - Math.min(...b.sizes.map((s) => s.price)));

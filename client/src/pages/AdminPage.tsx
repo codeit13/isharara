@@ -264,6 +264,8 @@ function CsvImportDialog() {
       if (!res.ok) throw new Error(data.message);
       setResults(data.results);
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shop-filters"] });
       toast({ title: `Imported ${data.imported} product${data.imported !== 1 ? "s" : ""}${data.failed ? `, ${data.failed} failed` : ""}` });
     } catch (e: any) {
       toast({ title: e.message || "Import failed", variant: "destructive" });
@@ -442,7 +444,21 @@ function ProductsTab({ products }: { products: ProductWithSizes[] }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shop-filters"] });
       toast({ title: "Product deleted" });
+    },
+  });
+
+  const toggleEnabledMutation = useMutation({
+    mutationFn: async ({ id, enabled }: { id: number; enabled: boolean }) => {
+      await apiRequest("PATCH", `/api/admin/products/${id}`, { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shop-filters"] });
+      toast({ title: "Product updated" });
     },
   });
 
@@ -483,6 +499,9 @@ function ProductsTab({ products }: { products: ProductWithSizes[] }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                     <p className="text-sm font-semibold">{product.name}</p>
+                    {(product as ProductWithSizes & { enabled?: boolean }).enabled === false && (
+                      <Badge variant="secondary" className="text-[10px] h-4 px-1.5 opacity-70">Disabled</Badge>
+                    )}
                     {product.isBestseller && <Badge variant="default" className="text-[10px] h-4 px-1.5">BS</Badge>}
                     {product.isTrending && <Badge variant="secondary" className="text-[10px] h-4 px-1.5">TR</Badge>}
                     {product.isNewArrival && <Badge variant="outline" className="text-[10px] h-4 px-1.5">NEW</Badge>}
@@ -498,6 +517,11 @@ function ProductsTab({ products }: { products: ProductWithSizes[] }) {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
+                  <Switch
+                    checked={(product as ProductWithSizes & { enabled?: boolean }).enabled !== false}
+                    onCheckedChange={(v) => toggleEnabledMutation.mutate({ id: product.id, enabled: v })}
+                    data-testid={`switch-enabled-${product.id}`}
+                  />
                   <EditProductDialog product={product} />
                   <Button size="icon" variant="ghost" onClick={() => deleteMutation.mutate(product.id)} data-testid={`button-delete-${product.id}`}>
                     <Trash2 className="w-4 h-4 text-muted-foreground" />
@@ -518,6 +542,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     name: "", brand: "ISHQARA", description: "", category: "Floral",
     notes: "", image: "/images/perfume-1.png", gender: "unisex",
     productType: "og",
+    enabled: true,
     isBestseller: false, isTrending: false, isNewArrival: false,
     sizes: [{ size: "50ml", price: 499, originalPrice: 0, stock: 50 }],
   });
@@ -537,6 +562,8 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shop-filters"] });
       toast({ title: "Product added" });
       onOpenChange(false);
     },
@@ -566,13 +593,13 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} data-testid="input-product-name" /></div>
             <div className="space-y-1">
-              <Label className="text-xs">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger data-testid="select-product-category"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["Floral", "Oriental", "Woody", "Fresh", "Citrus"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Category (comma-separated)</Label>
+              <Input
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="Floral, Oriental, Woody"
+                data-testid="input-product-category"
+              />
             </div>
           </div>
           <div className="space-y-1"><Label className="text-xs">Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="resize-none" data-testid="input-product-desc" /></div>
@@ -604,6 +631,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2"><Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} /><Label className="text-xs">Enabled</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isBestseller} onCheckedChange={(v) => setForm({ ...form, isBestseller: v })} /><Label className="text-xs">Bestseller</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isTrending} onCheckedChange={(v) => setForm({ ...form, isTrending: v })} /><Label className="text-xs">Trending</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isNewArrival} onCheckedChange={(v) => setForm({ ...form, isNewArrival: v })} /><Label className="text-xs">New Arrival</Label></div>
@@ -611,6 +639,12 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
           <Separator />
           <div className="flex items-center justify-between"><Label className="text-xs font-semibold">Sizes & Pricing</Label><Button size="sm" variant="outline" onClick={addSize} type="button"><Plus className="w-3 h-3 mr-1" /> Size</Button></div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <span>Size</span>
+            <span>Price (₹)</span>
+            <span>MRP (₹)</span>
+            <span>Stock</span>
+          </div>
           {form.sizes.map((s, i) => (
             <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="50ml" />
@@ -641,6 +675,7 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
     image: product.image,
     gender: product.gender,
     productType: (product as any).productType ?? "og",
+    enabled: (product as ProductWithSizes & { enabled?: boolean }).enabled !== false,
     isBestseller: product.isBestseller,
     isTrending: product.isTrending,
     isNewArrival: product.isNewArrival,
@@ -668,6 +703,8 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shop-filters"] });
       toast({ title: "Product updated" });
       setOpen(false);
     },
@@ -691,13 +728,12 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
             <div className="space-y-1">
-              <Label className="text-xs">Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {["Floral", "Oriental", "Woody", "Fresh", "Citrus"].map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label className="text-xs">Category (comma-separated)</Label>
+              <Input
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+                placeholder="Floral, Oriental, Woody"
+              />
             </div>
           </div>
           <div className="space-y-1"><Label className="text-xs">Description</Label><Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="resize-none" /></div>
@@ -729,12 +765,19 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
             </div>
           </div>
           <div className="flex flex-wrap gap-4">
+            <div className="flex items-center gap-2"><Switch checked={form.enabled} onCheckedChange={(v) => setForm({ ...form, enabled: v })} /><Label className="text-xs">Enabled</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isBestseller} onCheckedChange={(v) => setForm({ ...form, isBestseller: v })} /><Label className="text-xs">Bestseller</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isTrending} onCheckedChange={(v) => setForm({ ...form, isTrending: v })} /><Label className="text-xs">Trending</Label></div>
             <div className="flex items-center gap-2"><Switch checked={form.isNewArrival} onCheckedChange={(v) => setForm({ ...form, isNewArrival: v })} /><Label className="text-xs">New Arrival</Label></div>
           </div>
           <Separator />
           <Label className="text-xs font-semibold">Sizes & Pricing</Label>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <span>Size</span>
+            <span>Price (₹)</span>
+            <span>MRP (₹)</span>
+            <span>Stock</span>
+          </div>
           {form.sizes.map((s, i) => (
             <div key={i} className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <Input value={s.size} onChange={(e) => updateSize(i, "size", e.target.value)} placeholder="Size" />
@@ -1006,7 +1049,10 @@ function SettingsTab() {
 
 export default function AdminPage() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
-  const { data: products, isLoading: prodLoading } = useQuery<ProductWithSizes[]>({ queryKey: ["/api/products"] });
+  const { data: products, isLoading: prodLoading } = useQuery<ProductWithSizes[]>({
+    queryKey: ["/api/admin/products"],
+    enabled: !!user?.isAdmin,
+  });
   const { data: orders, isLoading: ordLoading } = useQuery<Order[]>({
     queryKey: ["/api/admin/orders"],
     enabled: !!user?.isAdmin,

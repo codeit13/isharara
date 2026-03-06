@@ -13,11 +13,20 @@ import {
 import { db } from "./db";
 import { eq, desc, sql, and, isNull } from "drizzle-orm";
 
+export interface ShopFilters {
+  categories: string[];
+  genders: string[];
+  productTypes: string[];
+}
+
 export interface IStorage {
   getProducts(): Promise<ProductWithSizes[]>;
+  getAllProducts(): Promise<ProductWithSizes[]>;
   getProduct(id: number): Promise<ProductWithSizes | undefined>;
+  getShopFilters(): Promise<ShopFilters>;
   createProduct(product: InsertProduct, sizes: InsertProductSize[]): Promise<ProductWithSizes>;
   updateProduct(id: number, product: Partial<InsertProduct>, sizes: { id?: number; size: string; price: number; originalPrice: number | null; stock: number }[]): Promise<ProductWithSizes | undefined>;
+  updateProductFields(id: number, fields: { enabled?: boolean }): Promise<ProductWithSizes | undefined>;
   deleteProduct(id: number): Promise<void>;
 
   getReviewsByProduct(productId: number): Promise<Review[]>;
@@ -55,6 +64,15 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getProducts(): Promise<ProductWithSizes[]> {
+    const allProducts = await db.select().from(products).where(eq(products.enabled, true));
+    const allSizes = await db.select().from(productSizes);
+    return allProducts.map((p) => ({
+      ...p,
+      sizes: allSizes.filter((s) => s.productId === p.id),
+    }));
+  }
+
+  async getAllProducts(): Promise<ProductWithSizes[]> {
     const allProducts = await db.select().from(products);
     const allSizes = await db.select().from(productSizes);
     return allProducts.map((p) => ({
@@ -64,10 +82,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProduct(id: number): Promise<ProductWithSizes | undefined> {
-    const [product] = await db.select().from(products).where(eq(products.id, id));
+    const [product] = await db.select().from(products).where(and(eq(products.id, id), eq(products.enabled, true)));
     if (!product) return undefined;
     const sizes = await db.select().from(productSizes).where(eq(productSizes.productId, id));
     return { ...product, sizes };
+  }
+
+  async getShopFilters(): Promise<ShopFilters> {
+    const allProducts = await db.select({ category: products.category, gender: products.gender, productType: products.productType }).from(products).where(eq(products.enabled, true));
+    const categorySet = new Set<string>();
+    const genderSet = new Set<string>();
+    const productTypeSet = new Set<string>();
+    for (const p of allProducts) {
+      (p.category || "")
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .forEach((c) => categorySet.add(c));
+      if (p.gender) genderSet.add(p.gender);
+      if (p.productType) productTypeSet.add(p.productType);
+    }
+    return {
+      categories: Array.from(categorySet).sort(),
+      genders: Array.from(genderSet).sort(),
+      productTypes: Array.from(productTypeSet).sort(),
+    };
   }
 
   async createProduct(product: InsertProduct, sizes: InsertProductSize[]): Promise<ProductWithSizes> {
@@ -97,6 +136,13 @@ export class DatabaseStorage implements IStorage {
       createdSizes.push(s);
     }
     return { ...updated, sizes: createdSizes };
+  }
+
+  async updateProductFields(id: number, fields: { enabled?: boolean }): Promise<ProductWithSizes | undefined> {
+    const [updated] = await db.update(products).set(fields).where(eq(products.id, id)).returning();
+    if (!updated) return undefined;
+    const sizes = await db.select().from(productSizes).where(eq(productSizes.productId, id));
+    return { ...updated, sizes };
   }
 
   async deleteProduct(id: number): Promise<void> {

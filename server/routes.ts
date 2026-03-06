@@ -21,6 +21,16 @@ export async function registerRoutes(
     res.json(products);
   });
 
+  app.get("/api/admin/products", isAuthenticated, requireAdmin, async (_req, res) => {
+    const products = await storage.getAllProducts();
+    res.json(products);
+  });
+
+  app.get("/api/shop-filters", async (_req, res) => {
+    const filters = await storage.getShopFilters();
+    res.json(filters);
+  });
+
   app.get("/api/products/:id", async (req, res) => {
     const product = await storage.getProduct(Number(req.params.id));
     if (!product) return res.status(404).json({ message: "Product not found" });
@@ -266,6 +276,17 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({ enabled: z.boolean() }).parse(req.body);
+      const product = await storage.updateProductFields(Number(req.params.id), { enabled: body.enabled });
+      if (!product) return res.status(404).json({ message: "Product not found" });
+      res.json(product);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
   app.delete("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     await storage.deleteProduct(Number(req.params.id));
     res.json({ success: true });
@@ -276,13 +297,13 @@ export async function registerRoutes(
     const headers = [
       "name", "brand", "description", "category", "notes",
       "image", "gender", "productType",
-      "isBestseller", "isTrending", "isNewArrival",
+      "enabled", "isBestseller", "isTrending", "isNewArrival",
       "sizes",
     ];
     const example = [
       "Rose Noir", "ISHQARA", "A dark floral scent with rose and oud",
       "Floral", "Rose,Oud,Musk", "/images/perfume-1.png",
-      "women", "og", "false", "false", "false",
+      "women", "og", "true", "false", "false", "false",
       "50ml:499:599:30|100ml:799:999:20",
     ];
     const csv = [headers.join(","), example.map((v) => `"${v}"`).join(",")].join("\n");
@@ -304,6 +325,7 @@ export async function registerRoutes(
           image: z.string().default("/images/perfume-1.png"),
           gender: z.string().default("unisex"),
           productType: z.string().default("og"),
+          enabled: z.string().optional(),
           isBestseller: z.string().optional(),
           isTrending: z.string().optional(),
           isNewArrival: z.string().optional(),
@@ -338,6 +360,7 @@ export async function registerRoutes(
             image: row.image,
             gender: row.gender,
             productType: row.productType,
+            enabled: row.enabled !== "false",
             isBestseller: row.isBestseller === "true",
             isTrending: row.isTrending === "true",
             isNewArrival: row.isNewArrival === "true",
