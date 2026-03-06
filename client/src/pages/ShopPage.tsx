@@ -67,7 +67,7 @@ export default function ShopPage() {
   if (category !== "All") {
     filtered = filtered.filter((p) => {
       const cats = (p.category || "").split(",").map((c) => c.trim()).filter(Boolean);
-      return cats.includes(category);
+      return cats.some((c) => c.toLowerCase() === category.toLowerCase());
     });
   }
   if (gender !== "All") filtered = filtered.filter((p) => (p.gender || "").toLowerCase() === gender.toLowerCase());

@@ -977,6 +977,7 @@ function SettingsTab() {
     { group: "Store Info",      keys: ["store_name", "store_email", "store_phone"] },
     { group: "UPI Payments",    keys: ["upi_business_name", "upi_merchant_mode", "upi_id", "upi_merchant_code"] },
     { group: "Feature Flags",   keys: ["cod_enabled", "razorpay_enabled"] },
+    { group: "Product Page Badges", keys: ["badge_delivery_enabled", "badge_delivery_text", "badge_returns_enabled", "badge_returns_text", "badge_authentic_enabled", "badge_authentic_text"] },
   ];
 
   const rowByKey = Object.fromEntries((rows || []).map((r) => [r.key, r]));

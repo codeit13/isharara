@@ -13,6 +13,12 @@ export type AppSettings = {
   cod_enabled: string;
   min_order_amount: string;
   razorpay_enabled: string;
+  badge_delivery_enabled: string;
+  badge_delivery_text: string;
+  badge_returns_enabled: string;
+  badge_returns_text: string;
+  badge_authentic_enabled: string;
+  badge_authentic_text: string;
 };
 
 const DEFAULTS: AppSettings = {
@@ -28,6 +34,12 @@ const DEFAULTS: AppSettings = {
   cod_enabled: "false",
   min_order_amount: "0",
   razorpay_enabled: "true",
+  badge_delivery_enabled: "true",
+  badge_delivery_text: "Free Delivery ₹{amount}+",
+  badge_returns_enabled: "true",
+  badge_returns_text: "7-Day Returns",
+  badge_authentic_enabled: "true",
+  badge_authentic_text: "100% Authentic",
 };
 
 export function useSettings() {
@@ -58,5 +70,11 @@ export function useSettings() {
     codEnabled: settings.cod_enabled === "true",
     minOrderAmount: numOr(settings.min_order_amount, 0),
     razorpayEnabled: settings.razorpay_enabled === "true",
+    badgeDeliveryEnabled: settings.badge_delivery_enabled !== "false",
+    badgeDeliveryText: settings.badge_delivery_text || "Free Delivery ₹{amount}+",
+    badgeReturnsEnabled: settings.badge_returns_enabled !== "false",
+    badgeReturnsText: settings.badge_returns_text || "7-Day Returns",
+    badgeAuthenticEnabled: settings.badge_authentic_enabled !== "false",
+    badgeAuthenticText: settings.badge_authentic_text || "100% Authentic",
   };
 }

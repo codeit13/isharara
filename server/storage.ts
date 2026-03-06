@@ -334,6 +334,12 @@ export class DatabaseStorage implements IStorage {
       { key: "cod_enabled",             value: "false",                     label: "Cash on Delivery",              description: "Enable or disable Cash on Delivery option",     type: "boolean" },
       { key: "min_order_amount",        value: "0",                         label: "Minimum Order Amount (₹)",      description: "Minimum cart value required to place an order",  type: "number" },
       { key: "razorpay_enabled",        value: "true",                      label: "Pay via Razorpay",              description: "Show Card / Net Banking (Razorpay) option at checkout", type: "boolean" },
+      { key: "badge_delivery_enabled",   value: "true",                      label: "Show Free Delivery Badge",      description: "Show delivery badge on product page", type: "boolean" },
+      { key: "badge_delivery_text",     value: "Free Delivery ₹{amount}+",   label: "Delivery Badge Text",           description: "Use {amount} for free shipping threshold", type: "string" },
+      { key: "badge_returns_enabled",   value: "true",                      label: "Show Returns Badge",            description: "Show returns badge on product page", type: "boolean" },
+      { key: "badge_returns_text",       value: "7-Day Returns",             label: "Returns Badge Text",            description: "Custom text for returns badge", type: "string" },
+      { key: "badge_authentic_enabled",  value: "true",                      label: "Show Authentic Badge",          description: "Show authenticity badge on product page", type: "boolean" },
+      { key: "badge_authentic_text",    value: "100% Authentic",            label: "Authentic Badge Text",           description: "Custom text for authenticity badge", type: "string" },
     ];
     for (const d of defaults) {
       await db

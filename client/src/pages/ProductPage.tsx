@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-settings";
 import type { ProductWithSizes, Review } from "@shared/schema";
 
 function StarRating({ rating, onChange, interactive = false }: { rating: number; onChange?: (r: number) => void; interactive?: boolean }) {
@@ -29,6 +30,15 @@ export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const { addItem } = useCart();
   const { toast } = useToast();
+  const {
+    freeShippingThreshold,
+    badgeDeliveryEnabled,
+    badgeDeliveryText,
+    badgeReturnsEnabled,
+    badgeReturnsText,
+    badgeAuthenticEnabled,
+    badgeAuthenticText,
+  } = useSettings();
   const [selectedSize, setSelectedSize] = useState<string>("");
   const [quantity, setQuantity] = useState(1);
 
@@ -254,19 +264,31 @@ export default function ProductPage() {
             </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 pt-2">
-            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
-              <Truck className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Free Delivery ₹1499+</p>
-            </div>
-            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
-              <RotateCcw className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">7-Day Returns</p>
-            </div>
-            <div className="text-center p-2 sm:p-3 rounded-md bg-muted/50">
-              <Shield className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">100% Authentic</p>
-            </div>
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            {badgeDeliveryEnabled && (
+              <div className="flex-1 min-w-[100px] max-w-[180px] text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <Truck className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">
+                  {badgeDeliveryText.includes("{amount}")
+                    ? freeShippingThreshold > 0
+                      ? badgeDeliveryText.replace("{amount}", freeShippingThreshold.toLocaleString())
+                      : "Free Delivery"
+                    : badgeDeliveryText}
+                </p>
+              </div>
+            )}
+            {badgeReturnsEnabled && (
+              <div className="flex-1 min-w-[100px] max-w-[180px] text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <RotateCcw className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{badgeReturnsText}</p>
+              </div>
+            )}
+            {badgeAuthenticEnabled && (
+              <div className="flex-1 min-w-[100px] max-w-[180px] text-center p-2 sm:p-3 rounded-md bg-muted/50">
+                <Shield className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">{badgeAuthenticText}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
