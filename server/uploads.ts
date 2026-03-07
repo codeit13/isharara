@@ -12,7 +12,8 @@ async function getClient(): Promise<import("@replit/object-storage").Client> {
   if (_client) return _client;
   try {
     const { Client } = await import("@replit/object-storage");
-    _client = new Client();
+    const bucketId = process.env.REPLIT_OBJECT_STORAGE_BUCKET;
+    _client = new Client(bucketId ? { bucketId } : undefined);
     return _client;
   } catch (e) {
     _clientError = e instanceof Error ? e : new Error(String(e));
