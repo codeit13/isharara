@@ -12,27 +12,9 @@ export interface UpiParams {
   merchantCode?: string;
 }
 
-/**
- * Branded UPI transaction notes - each base string stays under 80 chars with orderId appended.
- * Alphanumeric, spaces and periods only (no special characters for UPI compatibility).
- * Rotated deterministically by order ID so the same order always sees the same note.
- */
-const BRANDED_NOTES = [
-  "Your signature scent is on its way ISHQARA",
-  "Crafted for those who wear their mood ISHQARA",
-  "Luxury fragrance, delivered with love ISHQARA",
-  "One spritz to remember ISHQARA",
-  "You just made the room more interesting ISHQARA",
-  "Fragrance that tells your story ISHQARA",
-  "Bold. Elegant. Unapologetically you ISHQARA",
-  "Your next obsession, sealed with a scent ISHQARA",
-];
-
 /** Returns the transaction note (tn) used in UPI intent URLs. Export for UI display. */
 export function getUpiNote(orderId: string | number): string {
-  const idx = Number(orderId) % BRANDED_NOTES.length;
-  const base = BRANDED_NOTES[Math.abs(idx)];
-  return `#${orderId} ${base}`;
+  return `Payment for ${orderId}`;
 }
 
 /** Build the standard UPI payment URI (used for deep links and QR codes). */
@@ -70,43 +52,71 @@ export function buildUpiQrValue(params: UpiParams): string {
   return buildUpiUrl(params);
 }
 
-/** Per-app URI for iOS (Safari does not support generic upi://) */
+/**
+ * Per-app URI for iOS — each app uses a different format and exact keys.
+ * Safari does not support generic upi://, so we use app-specific schemes.
+ */
 export function buildAppUpiUrls(params: UpiParams): {
   label: string;
   icon: string;
   url: string;
 }[] {
-  const base = buildUpiUrl(params);
-  if (!base) return [];
+  const upiId = params.upiId || (import.meta.env.VITE_UPI_ID as string | undefined) || "";
+  const name = params.businessName || (import.meta.env.VITE_UPI_BUSINESS_NAME as string | undefined) || "ISHQARA";
+  if (!upiId) return [];
 
-  // Strip the "upi://pay?" prefix and use the raw query string
-  const qs = base.replace("upi://pay?", "");
+  const note = params.note ?? getUpiNote(params.orderId);
+  const tr = `ISHQARA-${params.orderId}`;
+  const am = params.amount.toFixed(2);
+  const mc = (params.merchantCode || "5411").replace(/\D/g, "").slice(0, 4) || "5411";
+
+  const pa = encodeURIComponent(upiId);
+  const pn = encodeURIComponent(name);
+  const tn = encodeURIComponent(note);
+  const trEnc = encodeURIComponent(tr);
+
+  // GPay: gpay://upi/pay?pa=&pn=&tr=&tn=&am=&cu=INR&mc=
+  const gpayUri = `gpay://upi/pay?pa=${pa}&pn=${pn}&tr=${trEnc}&tn=${tn}&am=${am}&cu=INR&mc=${mc}`;
+
+  // Paytm: paytmmp://pay?pa=&pn=&tr=&tn=&am=&cu=INR&mc=
+  const paytmUri = `paytmmp://pay?pa=${pa}&pn=${pn}&tr=${trEnc}&tn=${tn}&am=${am}&cu=INR&mc=${mc}`;
+
+  // PhonePe: phonepe://pay?pa=&pn=&mc=NA&tr=&tn=&am=&mam=&cu=INR
+  const phonepeUri = `phonepe://pay?pa=${pa}&pn=${pn}&mc=NA&tr=${trEnc}&tn=${tn}&am=${am}&mam=${am}&cu=INR`;
+
+  // All apps: upi://pay?pa=&pn=&mc=NA&tr=&tn=&am=&mam=&cu=INR
+  const allAppsUri = `upi://pay?pa=${pa}&pn=${pn}&mc=NA&tr=${trEnc}&tn=${tn}&am=${am}&mam=${am}&cu=INR`;
 
   return [
     {
-      label: "Cred",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/9/9d/CRED-LOGO2.png",
-      url: `credupipay://pay?${qs}`,
-    },
-    {
-      label: "PhonePe",
-      icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/PhonePe_Logo.svg/1200px-PhonePe_Logo.svg.png",
-      url: `phonepe://pay?${qs}`,
+      label: "All apps",
+      icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/UPI-Logo.png/200px-UPI-Logo.png",
+      url: allAppsUri,
     },
     {
       label: "Google Pay",
       icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Google_Pay_Logo.svg/1200px-Google_Pay_Logo.svg.png",
-      url: `gpay://upi/pay?${qs}`,
+      url: gpayUri,
     },
     {
       label: "Paytm",
       icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Paytm_Logo_%28standalone%29.svg/1200px-Paytm_Logo_%28standalone%29.svg.png",
-      url: `paytmmp://pay?${qs}`,
+      url: paytmUri,
+    },
+    {
+      label: "PhonePe",
+      icon: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/PhonePe_Logo.svg/1200px-PhonePe_Logo.svg.png",
+      url: phonepeUri,
+    },
+    {
+      label: "Cred",
+      icon: "https://upload.wikimedia.org/wikipedia/commons/9/9d/CRED-LOGO2.png",
+      url: `credupipay://pay?pa=${pa}&pn=${pn}&tr=${trEnc}&tn=${tn}&am=${am}&cu=INR&mc=${mc}`,
     },
     {
       label: "BHIM",
       icon: "https://upload.wikimedia.org/wikipedia/commons/9/90/Bhim-logo.png",
-      url: `bhim://pay?${qs}`,
+      url: `bhim://pay?pa=${pa}&pn=${pn}&mc=NA&tr=${trEnc}&tn=${tn}&am=${am}&mam=${am}&cu=INR`,
     },
   ];
 }
