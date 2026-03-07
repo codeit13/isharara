@@ -13,6 +13,7 @@ export const products = pgTable("products", {
   category: text("category").notNull(),
   notes: text("notes").array().notNull(),
   image: text("image").notNull(),
+  images: text("images").array().notNull().default([]), // gallery URLs; image = primary (first)
   isBestseller: boolean("is_bestseller").notNull().default(false),
   isTrending: boolean("is_trending").notNull().default(false),
   isNewArrival: boolean("is_new_arrival").notNull().default(false),

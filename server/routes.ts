@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import multer from "multer";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
@@ -10,11 +11,32 @@ import {
   createRazorpayOrder,
   verifyPaymentSignature,
 } from "./razorpay";
+import {
+  uploadProductImages,
+  getImageBuffer,
+  isAllowedImage,
+} from "./uploads";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // Serve product images from Replit Object Storage (public, no auth)
+  app.get("/api/uploads/*", async (req, res) => {
+    const objectName = req.path.replace(/^\/api\/uploads\//, "");
+    if (!objectName?.startsWith("products/")) {
+      return res.status(400).json({ message: "Invalid path" });
+    }
+    const buffer = await getImageBuffer(objectName);
+    if (!buffer) return res.status(404).json({ message: "Image not found" });
+    const ext = objectName.split(".").pop()?.toLowerCase();
+    const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : ext === "png" ? "image/png" : "image/webp";
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.type(mime).send(buffer);
+  });
 
   app.get("/api/products", async (_req, res) => {
     const products = await storage.getProducts();
@@ -344,6 +366,26 @@ export async function registerRoutes(
   app.delete("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     await storage.deleteProduct(Number(req.params.id));
     res.json({ success: true });
+  });
+
+  // Upload multiple product images to Replit Object Storage (named after product)
+  app.post("/api/admin/upload-images", isAuthenticated, requireAdmin, upload.array("images", 10), async (req, res) => {
+    const files = (req as any).files as Express.Multer.File[];
+    const productName = (req.body?.productName as string)?.trim();
+    const startIndex = Math.max(0, parseInt(String(req.body?.startIndex || 0), 10) || 0);
+    if (!files?.length) return res.status(400).json({ message: "No image files provided" });
+    if (!productName) return res.status(400).json({ message: "Product name is required" });
+    for (const f of files) {
+      if (!isAllowedImage(f.mimetype, f.size)) {
+        return res.status(400).json({ message: "Invalid file. Use JPEG, PNG or WebP, max 2MB each." });
+      }
+    }
+    try {
+      const urls = await uploadProductImages(productName, files.map((f) => ({ buffer: f.buffer, mimetype: f.mimetype })), startIndex);
+      res.json({ urls });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message ?? "Upload failed" });
+    }
   });
 
   // CSV template download

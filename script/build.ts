@@ -19,6 +19,7 @@ const allowlist = [
   "memorystore",
   "multer",
   "nanoid",
+  "@replit/object-storage",
   "nodemailer",
   "openai",
   "passport",
