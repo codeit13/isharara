@@ -381,7 +381,13 @@ export async function registerRoutes(
       const url = await uploadSingleImage(file.buffer, file.mimetype);
       res.json({ url });
     } catch (e: any) {
-      res.status(500).json({ message: e.message ?? "Upload failed" });
+      const msg = e.message ?? "Upload failed";
+      const isStorageError = /URL is required|ECONNREFUSED|fetch failed|Replit/i.test(msg);
+      res.status(500).json({
+        message: isStorageError
+          ? "Replit Object Storage is not available. Deploy from Replit or use /images/ paths."
+          : msg,
+      });
     }
   });
 
@@ -414,7 +420,13 @@ export async function registerRoutes(
 
       res.json({ updated, unmatched });
     } catch (e: any) {
-      res.status(500).json({ message: e.message ?? "Upload failed" });
+      const msg = e.message ?? "Upload failed";
+      const isStorageError = /URL is required|ECONNREFUSED|fetch failed|Replit/i.test(msg);
+      res.status(500).json({
+        message: isStorageError
+          ? "Replit Object Storage is not available in this environment. Deploy from Replit or use /images/ paths for product images."
+          : msg,
+      });
     }
   });
 
