@@ -12,9 +12,11 @@ import {
   verifyPaymentSignature,
 } from "./razorpay";
 import {
-  uploadProductImages,
+  uploadSingleImage,
+  uploadImageByFilename,
   getImageBuffer,
   isAllowedImage,
+  sanitizeProductName,
 } from "./uploads";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
@@ -25,8 +27,8 @@ export async function registerRoutes(
 ): Promise<Server> {
 
   // Serve product images from Replit Object Storage (public, no auth)
-  app.get("/api/uploads/*", async (req, res) => {
-    const objectName = req.path.replace(/^\/api\/uploads\//, "");
+  app.get("/api/uploads/{*path}", async (req, res) => {
+    const objectName = (req.params as { path?: string }).path ?? "";
     if (!objectName?.startsWith("products/")) {
       return res.status(400).json({ message: "Invalid path" });
     }
@@ -368,21 +370,49 @@ export async function registerRoutes(
     res.json({ success: true });
   });
 
-  // Upload multiple product images to Replit Object Storage (named after product)
-  app.post("/api/admin/upload-images", isAuthenticated, requireAdmin, upload.array("images", 10), async (req, res) => {
+  // Single image upload (for Add/Edit product modal)
+  app.post("/api/admin/upload-image", isAuthenticated, requireAdmin, upload.single("image"), async (req, res) => {
+    const file = (req as any).file;
+    if (!file) return res.status(400).json({ message: "No image file provided" });
+    if (!isAllowedImage(file.mimetype, file.size)) {
+      return res.status(400).json({ message: "Invalid file. Use JPEG, PNG or WebP, max 2MB." });
+    }
+    try {
+      const url = await uploadSingleImage(file.buffer, file.mimetype);
+      res.json({ url });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message ?? "Upload failed" });
+    }
+  });
+
+  // Bulk upload: match filenames to products, upload to Replit, update DB
+  app.post("/api/admin/bulk-upload-images", isAuthenticated, requireAdmin, upload.array("images", 50), async (req, res) => {
     const files = (req as any).files as Express.Multer.File[];
-    const productName = (req.body?.productName as string)?.trim();
-    const startIndex = Math.max(0, parseInt(String(req.body?.startIndex || 0), 10) || 0);
     if (!files?.length) return res.status(400).json({ message: "No image files provided" });
-    if (!productName) return res.status(400).json({ message: "Product name is required" });
     for (const f of files) {
       if (!isAllowedImage(f.mimetype, f.size)) {
-        return res.status(400).json({ message: "Invalid file. Use JPEG, PNG or WebP, max 2MB each." });
+        return res.status(400).json({ message: `Invalid file: ${f.originalname}. Use JPEG, PNG or WebP, max 2MB each.` });
       }
     }
     try {
-      const urls = await uploadProductImages(productName, files.map((f) => ({ buffer: f.buffer, mimetype: f.mimetype })), startIndex);
-      res.json({ urls });
+      const allProducts = await storage.getAllProducts();
+      const updated: { productId: number; name: string; url: string }[] = [];
+      const unmatched: string[] = [];
+
+      for (const file of files) {
+        const nameWithoutExt = file.originalname.replace(/\.[^.]+$/, "");
+        const sanitized = sanitizeProductName(nameWithoutExt);
+        const product = allProducts.find((p) => sanitizeProductName(p.name) === sanitized);
+        if (!product) {
+          unmatched.push(file.originalname);
+          continue;
+        }
+        const url = await uploadImageByFilename(file.buffer, file.mimetype, file.originalname);
+        await storage.updateProduct(product.id, { image: url, images: [url] }, product.sizes.map((s) => ({ ...s, originalPrice: s.originalPrice ?? null })));
+        updated.push({ productId: product.id, name: product.name, url });
+      }
+
+      res.json({ updated, unmatched });
     } catch (e: any) {
       res.status(500).json({ message: e.message ?? "Upload failed" });
     }

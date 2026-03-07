@@ -224,6 +224,48 @@ interface ImportResult {
   error?: string;
 }
 
+function BulkImageUpload() {
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
+  return (
+    <>
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        multiple
+        className="hidden"
+        id="bulk-image-upload"
+        onChange={async (e) => {
+          const files = e.target.files;
+          if (!files?.length) return;
+          setUploading(true);
+          try {
+            const fd = new FormData();
+            for (let i = 0; i < files.length; i++) fd.append("images", files[i]);
+            const res = await fetch("/api/admin/bulk-upload-images", { method: "POST", body: fd, credentials: "include" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message ?? "Upload failed");
+            queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/admin/products"] });
+            const { updated, unmatched } = data;
+            if (updated?.length) toast({ title: `${updated.length} product(s) updated` });
+            if (unmatched?.length) toast({ title: `${unmatched.length} unmatched: ${unmatched.slice(0, 3).join(", ")}${unmatched.length > 3 ? "…" : ""}`, variant: "destructive" });
+          } catch (err: any) {
+            toast({ title: err.message ?? "Upload failed", variant: "destructive" });
+          } finally {
+            setUploading(false);
+            e.target.value = "";
+          }
+        }}
+      />
+      <Button size="sm" variant="outline" onClick={() => document.getElementById("bulk-image-upload")?.click()} disabled={uploading} data-testid="button-bulk-upload-images" title="Image filename must match product name (e.g. Velvet Rose.jpg)">
+        <Upload className="w-4 h-4 mr-1.5" /> {uploading ? "Uploading…" : "Bulk upload images"}
+      </Button>
+    </>
+  );
+}
+
 function CsvImportDialog() {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -480,9 +522,13 @@ function ProductsTab({ products }: { products: ProductWithSizes[] }) {
         <p className="text-xs text-muted-foreground self-center sm:whitespace-nowrap">
           {filtered.length} / {products.length}
         </p>
-        <div className="flex items-center gap-2">
-          <CsvImportDialog />
-          <AddProductDialog open={addOpen} onOpenChange={setAddOpen} />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <BulkImageUpload />
+            <CsvImportDialog />
+            <AddProductDialog open={addOpen} onOpenChange={setAddOpen} />
+          </div>
+          <p className="text-[10px] text-muted-foreground">Bulk upload: filename must match product name (e.g. Velvet Rose.jpg)</p>
         </div>
       </div>
       {filtered.length === 0 ? (
@@ -540,7 +586,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
   const { toast } = useToast();
   const [form, setForm] = useState({
     name: "", brand: "ISHQARA", description: "", category: "Floral",
-    notes: "", image: "", images: [] as string[], gender: "unisex",
+    notes: "", image: "/images/perfume-1.png", gender: "unisex",
     productType: "og",
     enabled: true,
     isBestseller: false, isTrending: false, isNewArrival: false,
@@ -554,12 +600,10 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
         ...s,
         originalPrice: s.originalPrice > 0 ? s.originalPrice : null,
       }));
-      const image = form.images[0] ?? form.image;
-      if (!image) throw new Error("Upload at least one product image");
       await apiRequest("POST", "/api/admin/products", {
         ...form,
-        image,
-        images: form.images,
+        image: form.image,
+        images: [form.image],
         notes: notesArr,
         sizes,
       });
@@ -610,51 +654,39 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Notes (comma-sep)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Rose, Oud, Musk" /></div>
             <div className="space-y-1 col-span-2">
-              <Label className="text-xs">Product Images (named after product)</Label>
-              <p className="text-[10px] text-muted-foreground mb-1">Enter product name above, then upload. Files saved as: product-name-1.jpg, product-name-2.jpg, etc.</p>
+              <Label className="text-xs">Product Image</Label>
               <div className="flex gap-2 items-center">
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  multiple
                   className="hidden"
-                  id="add-product-images"
+                  id="add-product-image"
                   onChange={async (e) => {
-                    const files = e.target.files;
-                    if (!files?.length || !form.name.trim()) {
-                      toast({ title: "Enter product name first", variant: "destructive" });
-                      e.target.value = "";
-                      return;
-                    }
+                    const file = e.target.files?.[0];
+                    if (!file) return;
                     try {
                       const fd = new FormData();
-                      fd.append("productName", form.name.trim());
-                      for (let i = 0; i < files.length; i++) fd.append("images", files[i]);
-                      const res = await fetch("/api/admin/upload-images", { method: "POST", body: fd, credentials: "include" });
+                      fd.append("image", file);
+                      const res = await fetch("/api/admin/upload-image", { method: "POST", body: fd, credentials: "include" });
                       if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.message ?? "Upload failed");
                       }
-                      const { urls } = await res.json();
-                      setForm((f) => ({ ...f, images: urls, image: urls[0] }));
-                      toast({ title: `${urls.length} image(s) uploaded to Replit` });
+                      const { url } = await res.json();
+                      setForm((f) => ({ ...f, image: url }));
+                      toast({ title: "Image uploaded" });
                     } catch (err: any) {
                       toast({ title: err.message ?? "Upload failed", variant: "destructive" });
                     }
                     e.target.value = "";
                   }}
                 />
-                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("add-product-images")?.click()} disabled={!form.name.trim()}>
-                  <Upload className="w-3 h-3 mr-1" /> Upload to Replit
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById("add-product-image")?.click()}>
+                  <Upload className="w-3 h-3 mr-1" /> Upload
                 </Button>
+                <Input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="/images/... or path" className="flex-1" />
               </div>
-              {form.images.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {form.images.map((url, i) => (
-                    <img key={url} src={url} alt={`${form.name} ${i + 1}`} className="h-20 w-20 object-cover rounded border" />
-                  ))}
-                </div>
-              )}
+              {form.image && <img src={form.image} alt="Preview" className="mt-2 h-20 w-20 object-cover rounded border" />}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -704,7 +736,7 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             </div>
           ))}
 
-          <Button className="w-full" onClick={() => addMutation.mutate()} disabled={!form.name || form.images.length === 0 || addMutation.isPending} data-testid="button-save-product">
+          <Button className="w-full" onClick={() => addMutation.mutate()} disabled={!form.name || addMutation.isPending} data-testid="button-save-product">
             {addMutation.isPending ? "Saving..." : "Save Product"}
           </Button>
         </div>
@@ -715,7 +747,6 @@ function AddProductDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
 
 function EditProductDialog({ product }: { product: ProductWithSizes }) {
   const { toast } = useToast();
-  const existingImages = (product as ProductWithSizes & { images?: string[] }).images ?? (product.image ? [product.image] : []);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
     name: product.name,
@@ -724,7 +755,6 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
     category: product.category,
     notes: product.notes.join(", "),
     image: product.image,
-    images: existingImages as string[],
     gender: product.gender,
     productType: (product as any).productType ?? "og",
     enabled: (product as ProductWithSizes & { enabled?: boolean }).enabled !== false,
@@ -747,12 +777,10 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
         ...s,
         originalPrice: s.originalPrice > 0 ? s.originalPrice : null,
       }));
-      const image = form.images[0] ?? form.image;
-      if (!image) throw new Error("At least one image required");
       await apiRequest("PUT", `/api/admin/products/${product.id}`, {
         ...form,
-        image,
-        images: form.images,
+        image: form.image,
+        images: [form.image],
         notes: notesArr,
         sizes,
       });
@@ -796,52 +824,39 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Notes (comma-sep)</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} /></div>
             <div className="space-y-1 col-span-2">
-              <Label className="text-xs">Product Images (named after product)</Label>
-              <p className="text-[10px] text-muted-foreground mb-1">Files saved as: product-name-1.jpg, product-name-2.jpg, etc.</p>
+              <Label className="text-xs">Product Image</Label>
               <div className="flex gap-2 items-center">
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
-                  multiple
                   className="hidden"
-                  id={`edit-product-images-${product.id}`}
+                  id={`edit-product-image-${product.id}`}
                   onChange={async (e) => {
-                    const files = e.target.files;
-                    if (!files?.length || !form.name.trim()) {
-                      toast({ title: "Product name required", variant: "destructive" });
-                      e.target.value = "";
-                      return;
-                    }
+                    const file = e.target.files?.[0];
+                    if (!file) return;
                     try {
                       const fd = new FormData();
-                      fd.append("productName", form.name.trim());
-                      fd.append("startIndex", String(form.images.length));
-                      for (let i = 0; i < files.length; i++) fd.append("images", files[i]);
-                      const res = await fetch("/api/admin/upload-images", { method: "POST", body: fd, credentials: "include" });
+                      fd.append("image", file);
+                      const res = await fetch("/api/admin/upload-image", { method: "POST", body: fd, credentials: "include" });
                       if (!res.ok) {
                         const err = await res.json().catch(() => ({}));
                         throw new Error(err.message ?? "Upload failed");
                       }
-                      const { urls } = await res.json();
-                      setForm((f) => ({ ...f, images: [...f.images, ...urls], image: f.images[0] ?? urls[0] }));
-                      toast({ title: `${urls.length} image(s) uploaded` });
+                      const { url } = await res.json();
+                      setForm((f) => ({ ...f, image: url }));
+                      toast({ title: "Image uploaded" });
                     } catch (err: any) {
                       toast({ title: err.message ?? "Upload failed", variant: "destructive" });
                     }
                     e.target.value = "";
                   }}
                 />
-                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`edit-product-images-${product.id}`)?.click()}>
-                  <Upload className="w-3 h-3 mr-1" /> Add more images
+                <Button type="button" variant="outline" size="sm" onClick={() => document.getElementById(`edit-product-image-${product.id}`)?.click()}>
+                  <Upload className="w-3 h-3 mr-1" /> Upload
                 </Button>
+                <Input value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} placeholder="/images/... or path" className="flex-1" />
               </div>
-              {form.images.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {form.images.map((url, i) => (
-                    <img key={`${url}-${i}`} src={url} alt={`${form.name} ${i + 1}`} className="h-20 w-20 object-cover rounded border" />
-                  ))}
-                </div>
-              )}
+              {form.image && <img src={form.image} alt="Preview" className="mt-2 h-20 w-20 object-cover rounded border" />}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -889,7 +904,7 @@ function EditProductDialog({ product }: { product: ProductWithSizes }) {
               <Input type="number" value={s.stock} onChange={(e) => updateSize(i, "stock", Number(e.target.value))} placeholder="Stock" />
             </div>
           ))}
-          <Button className="w-full" onClick={() => editMutation.mutate()} disabled={form.images.length === 0 || editMutation.isPending} data-testid="button-update-product">
+          <Button className="w-full" onClick={() => editMutation.mutate()} disabled={editMutation.isPending} data-testid="button-update-product">
             {editMutation.isPending ? "Updating..." : "Update Product"}
           </Button>
         </div>
