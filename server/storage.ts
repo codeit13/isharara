@@ -179,6 +179,13 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));
   }
 
+  /** Returns true if this user/email has placed any order before. */
+  async hasOrderedBefore(userId: string | null, email: string): Promise<boolean> {
+    const uid = userId || "";
+    const orders = await this.getOrdersByUserIdOrEmail(uid, email);
+    return orders.length > 0;
+  }
+
   /** Orders for this user by userId, or by email when userId is null (guest/legacy orders). */
   async getOrdersByUserIdOrEmail(userId: string, email: string): Promise<Order[]> {
     const byUser = await db.select().from(orders).where(eq(orders.userId, userId)).orderBy(desc(orders.createdAt));

@@ -85,6 +85,7 @@ export const promotions = pgTable("promotions", {
   discountValue: integer("discount_value").notNull(),
   code: text("code"),
   isActive: boolean("is_active").notNull().default(true),
+  firstOrderOnly: boolean("first_order_only").notNull().default(false),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
 });

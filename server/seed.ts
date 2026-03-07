@@ -8,6 +8,7 @@ export async function seedDatabase() {
   if (existingProducts.length > 0) {
     await ensureDemoUser();
     await ensureB2G1PromoDescription();
+    await ensureFirstOrderPromo();
     return;
   }
 
@@ -199,6 +200,7 @@ export async function seedDatabase() {
       discountValue: 10,
       code: "FIRST10",
       isActive: true,
+      firstOrderOnly: true,
     },
     {
       title: "Buy 2 Get 1 Free",
@@ -228,6 +230,13 @@ async function ensureB2G1PromoDescription() {
   const [b2g1] = await db.select().from(promotions).where(eq(promotions.code, "B2G1"));
   if (b2g1 && b2g1.description !== "Buy 2 Get 1 Free") {
     await db.update(promotions).set({ title: "Buy 2 Get 1 Free", description: "Buy 2 Get 1 Free" }).where(eq(promotions.code, "B2G1"));
+  }
+}
+
+async function ensureFirstOrderPromo() {
+  const [first10] = await db.select().from(promotions).where(eq(promotions.code, "FIRST10"));
+  if (first10 && !(first10 as { firstOrderOnly?: boolean }).firstOrderOnly) {
+    await db.update(promotions).set({ firstOrderOnly: true } as any).where(eq(promotions.code, "FIRST10"));
   }
 }
 

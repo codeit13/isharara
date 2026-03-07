@@ -65,6 +65,46 @@ export async function registerRoutes(
     res.json(promos);
   });
 
+  app.post("/api/checkout/validate-promo", optionalAuth, async (req, res) => {
+    try {
+      const body = z.object({
+        code: z.string().min(1),
+        email: z.string().email().optional(),
+      }).parse(req.body);
+      const user = (req as any).user;
+      const userId = user?.id ?? null;
+      const email = body.email || user?.email || "";
+
+      const promos = await storage.getPromotions();
+      const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === body.code.trim().toUpperCase());
+      if (!promo) {
+        return res.json({ valid: false, reason: "Invalid or expired code" });
+      }
+
+      const now = new Date();
+      if (promo.startDate && new Date(promo.startDate) > now) {
+        return res.json({ valid: false, reason: "This code is not yet active" });
+      }
+      if (promo.endDate && new Date(promo.endDate) < now) {
+        return res.json({ valid: false, reason: "This code has expired" });
+      }
+
+      if (promo.firstOrderOnly) {
+        if (!email) {
+          return res.json({ valid: false, reason: "Enter your email to use this first-order code" });
+        }
+        const hasOrdered = await storage.hasOrderedBefore(userId, email);
+        if (hasOrdered) {
+          return res.json({ valid: false, reason: "This code is for first-time customers only" });
+        }
+      }
+
+      res.json({ valid: true, promo });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
   app.post("/api/orders", optionalAuth, async (req, res) => {
     try {
       const orderSchema = z.object({
@@ -85,11 +125,25 @@ export async function registerRoutes(
         discount: z.number().min(0),
         total: z.number().min(0),
         paymentMethod: z.enum(["upi", "razorpay"]),
+        promoCode: z.string().optional(),
       });
       const data = orderSchema.parse(req.body);
       const user = (req as any).user;
       const userId = user?.id || null;
-      const order = await storage.createOrder({ ...data, userId });
+
+      if (data.discount > 0 && data.promoCode) {
+        const promos = await storage.getPromotions();
+        const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === data.promoCode!.trim().toUpperCase());
+        if (promo?.firstOrderOnly) {
+          const hasOrdered = await storage.hasOrderedBefore(userId, data.email);
+          if (hasOrdered) {
+            return res.status(400).json({ message: "This code is for first-time customers only" });
+          }
+        }
+      }
+
+      const { promoCode: _pc, ...orderData } = data;
+      const order = await storage.createOrder({ ...orderData, userId });
 
       // Auto-link phone/email to user account on first use
       if (user) {
@@ -389,6 +443,7 @@ export async function registerRoutes(
         discountValue: z.number().min(0),
         code: z.string().nullable().optional(),
         isActive: z.boolean().optional().default(true),
+        firstOrderOnly: z.boolean().optional().default(false),
         startDate: z.any().nullable().optional(),
         endDate: z.any().nullable().optional(),
       });
@@ -401,9 +456,25 @@ export async function registerRoutes(
   });
 
   app.patch("/api/admin/promotions/:id", isAuthenticated, requireAdmin, async (req, res) => {
-    const updated = await storage.updatePromotion(Number(req.params.id), req.body);
-    if (!updated) return res.status(404).json({ message: "Promotion not found" });
-    res.json(updated);
+    try {
+      const patchSchema = z.object({
+        title: z.string().min(1).optional(),
+        description: z.string().min(1).optional(),
+        discountType: z.enum(["percentage", "flat", "bundle"]).optional(),
+        discountValue: z.number().min(0).optional(),
+        code: z.string().nullable().optional(),
+        isActive: z.boolean().optional(),
+        firstOrderOnly: z.boolean().optional(),
+        startDate: z.any().nullable().optional(),
+        endDate: z.any().nullable().optional(),
+      });
+      const data = patchSchema.parse(req.body);
+      const updated = await storage.updatePromotion(Number(req.params.id), data);
+      if (!updated) return res.status(404).json({ message: "Promotion not found" });
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
   });
 
   app.get("/api/admin/subscribers", isAuthenticated, requireAdmin, async (_req, res) => {

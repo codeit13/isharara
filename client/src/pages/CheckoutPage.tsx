@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, X, MapPin, ExternalLink, ShoppingBag, ChevronUp, ChevronDown, Copy, AlertTriangle } from "lucide-react";
+import { ArrowLeft, CreditCard, Smartphone, CheckCircle2, MapPin, ExternalLink, ShoppingBag, ChevronUp, ChevronDown, Copy, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCart } from "@/lib/cart";
+import { useCartPromo } from "@/lib/cart-promo";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { useSettings } from "@/hooks/use-settings";
@@ -17,7 +19,7 @@ import {
   buildUpiUrl, buildUpiQrValue, buildAppUpiUrls, detectDevice, triggerAndroidUpi, getUpiNote,
 } from "@/lib/upi";
 import { QRCodeSVG } from "qrcode.react";
-import type { Order, Promotion, Address } from "@shared/schema";
+import type { Order, Address } from "@shared/schema";
 
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
@@ -36,8 +38,7 @@ export default function CheckoutPage() {
   const [upiState, setUpiState] = useState<"idle" | "pending" | "confirmed">("idle");
   const [upiOrderId, setUpiOrderId] = useState<number | null>(null);
   const [upiAmount, setUpiAmount] = useState<number>(0);
-  const [promoCode, setPromoCode] = useState("");
-  const [appliedPromo, setAppliedPromo] = useState<Promotion | null>(null);
+  const { appliedPromo, getDiscountAmount, getPromoEffectText } = useCartPromo();
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
@@ -50,8 +51,7 @@ export default function CheckoutPage() {
     pincode: "",
   });
 
-  const { data: promotions } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
-  const { data: addresses } = useQuery<Address[]>({
+  const { data: addresses, isLoading: addressesLoading } = useQuery<Address[]>({
     queryKey: ["/api/addresses"],
     enabled: !!user,
     staleTime: 0,
@@ -91,37 +91,8 @@ export default function CheckoutPage() {
   }, [razorpayEnabled, paymentMethod]);
 
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
-
-  const discountAmount = (() => {
-    if (!appliedPromo || !appliedPromo.isActive) return 0;
-    if (appliedPromo.discountType === "percentage") {
-      return Math.round((totalPrice + shipping) * (appliedPromo.discountValue / 100));
-    }
-    if (appliedPromo.discountType === "flat") {
-      return Math.min(appliedPromo.discountValue, totalPrice + shipping);
-    }
-    return 0;
-  })();
-
+  const discountAmount = getDiscountAmount(totalPrice + shipping);
   const grandTotal = Math.max(0, totalPrice + shipping - discountAmount);
-
-  const applyPromo = () => {
-    const code = promoCode.trim().toUpperCase();
-    if (!code) return;
-    const promo = promotions?.find((p) => p.isActive && p.code?.toUpperCase() === code);
-    if (promo) {
-      setAppliedPromo(promo);
-      toast({ title: `Code "${promo.code}" applied` });
-    } else {
-      setAppliedPromo(null);
-      toast({ title: "Invalid or expired code", variant: "destructive" });
-    }
-  };
-
-  const removePromo = () => {
-    setAppliedPromo(null);
-    setPromoCode("");
-  };
 
   const orderPayload = () => {
     const orderItems = items.map((i) => ({
@@ -138,6 +109,7 @@ export default function CheckoutPage() {
       discount: discountAmount,
       total: grandTotal,
       paymentMethod,
+      ...(appliedPromo?.code && { promoCode: appliedPromo.code }),
     };
   };
 
@@ -518,7 +490,7 @@ export default function CheckoutPage() {
                 </span>
                 Delivery Details
               </h3>
-              {user && (
+              {user && !addressesLoading && (
                 <Link href="/account">
                   <button className="text-xs text-primary font-medium hover:underline">
                     Manage
@@ -527,8 +499,24 @@ export default function CheckoutPage() {
               )}
             </div>
 
+            {/* Address loader — shown while fetching addresses for logged-in users */}
+            {user && addressesLoading && (
+              <div className="space-y-4 py-2" data-testid="delivery-details-loader">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+                  <span>Loading your saved addresses…</span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[1, 2].map((i) => (
+                    <Skeleton key={i} className="h-[88px] w-full rounded-lg" />
+                  ))}
+                </div>
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
+            )}
+
             {/* Saved address picker — larger tap targets on mobile */}
-            {user && addresses && addresses.length > 0 && (
+            {user && !addressesLoading && addresses && addresses.length > 0 && (
               <div className="mb-4">
                 <p className="text-xs text-muted-foreground mb-3 font-medium">Saved addresses</p>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -567,8 +555,8 @@ export default function CheckoutPage() {
               </div>
             )}
 
-            {/* Manual form */}
-            {(!(user && addresses && addresses.length > 0) || showManualForm) && (
+            {/* Manual form — shown when no saved addresses, or when user toggles manual entry */}
+            {(!addressesLoading && !(user && addresses && addresses.length > 0) || showManualForm) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium">Full Name</Label>
@@ -685,11 +673,14 @@ export default function CheckoutPage() {
               </div>
               {appliedPromo && discountAmount > 0 && (
                 <div className="flex justify-between text-green-600">
-                  <span className="flex items-center gap-1">
+                  <span className="flex items-center gap-1.5">
                     Discount ({appliedPromo.code})
-                    <button type="button" onClick={removePromo} className="p-0.5 rounded hover:bg-muted" aria-label="Remove code">
-                      <X className="w-3 h-3" />
-                    </button>
+                    <span className="text-[10px] text-muted-foreground font-normal">{getPromoEffectText(appliedPromo)}</span>
+                    <Link href="/cart">
+                      <button type="button" className="text-primary text-xs hover:underline" aria-label="Change promo in cart">
+                        Change
+                      </button>
+                    </Link>
                   </span>
                   <span>- Rs. {discountAmount.toLocaleString()}</span>
                 </div>
@@ -700,19 +691,6 @@ export default function CheckoutPage() {
                 <span data-testid="text-checkout-total">Rs. {grandTotal.toLocaleString()}</span>
               </div>
             </div>
-            {!appliedPromo && promotions && promotions.some((p) => p.isActive && p.code) && (
-              <div className="mt-3 flex gap-2">
-                <Input
-                  placeholder="Promo code"
-                  value={promoCode}
-                  onChange={(e) => setPromoCode(e.target.value)}
-                  className="flex-1"
-                />
-                <Button type="button" variant="outline" size="sm" onClick={applyPromo}>
-                  Apply
-                </Button>
-              </div>
-            )}
             <Button
               className="w-full mt-4"
               disabled={!isFormValid || isSubmitting || isBelowMinOrder}
@@ -759,13 +737,16 @@ export default function CheckoutPage() {
                 </div>
                 {appliedPromo && discountAmount > 0 && (
                   <div className="flex justify-between text-green-600">
-                    <span className="flex items-center gap-1">
+                    <span className="flex flex-wrap items-center gap-1">
                       Discount ({appliedPromo.code})
-                      <button type="button" onClick={removePromo} className="p-1 rounded-md hover:bg-muted" aria-label="Remove code">
-                        <X className="w-3.5 h-3.5" />
-                      </button>
+                      <span className="text-[10px] text-muted-foreground font-normal">{getPromoEffectText(appliedPromo)}</span>
+                      <Link href="/cart">
+                        <button type="button" className="text-primary text-xs hover:underline" aria-label="Change promo in cart">
+                          Change
+                        </button>
+                      </Link>
                     </span>
-                    <span className="font-medium">- Rs. {discountAmount.toLocaleString()}</span>
+                    <span className="font-medium whitespace-nowrap">- Rs. {discountAmount.toLocaleString()}</span>
                   </div>
                 )}
                 <Separator className="my-2" />
@@ -774,20 +755,6 @@ export default function CheckoutPage() {
                   <span data-testid="text-checkout-total-mobile">Rs. {grandTotal.toLocaleString()}</span>
                 </div>
               </div>
-              {!appliedPromo && promotions && promotions.some((p) => p.isActive && p.code) && (
-                <div className="flex gap-2 mt-4">
-                  <Input
-                    placeholder="Promo code"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    className="flex-1 h-10"
-                    data-testid="input-promo-mobile"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={applyPromo} className="h-10" data-testid="button-apply-promo-mobile">
-                    Apply
-                  </Button>
-                </div>
-              )}
               <Button
                 className="w-full mt-4 h-12 font-semibold"
                 disabled={!isFormValid || isSubmitting || isBelowMinOrder}

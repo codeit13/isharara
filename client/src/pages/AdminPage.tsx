@@ -800,6 +800,7 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true,
+    firstOrderOnly: false, startDate: "", endDate: "",
   });
 
   const addMutation = useMutation({
@@ -807,14 +808,15 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
       await apiRequest("POST", "/api/admin/promotions", {
         ...form,
         code: form.code || null,
-        startDate: null,
-        endDate: null,
+        startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
+        endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
       toast({ title: "Promotion added" });
       setAddOpen(false);
+      setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, startDate: "", endDate: "" });
     },
   });
 
@@ -829,7 +831,7 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
     <div data-testid="tab-promotions">
       <div className="flex items-center justify-between gap-2 mb-4">
         <p className="text-sm font-medium">{promotions.length} Promotions</p>
-        <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, startDate: "", endDate: "" }); }}>
           <DialogTrigger asChild>
             <Button size="sm" data-testid="button-add-promo"><Plus className="w-4 h-4 mr-1" /> Add Promo</Button>
           </DialogTrigger>
@@ -840,19 +842,46 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
               <div className="space-y-1"><Label className="text-xs">Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-xs">Type</Label>
-                  <Select value={form.discountType} onValueChange={(v) => setForm({ ...form, discountType: v })}>
+                  <Label className="text-xs">Discount Type</Label>
+                  <Select value={form.discountType} onValueChange={(v) => setForm({ ...form, discountType: v, discountValue: v === "bundle" ? 0 : form.discountValue })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="percentage">Percentage</SelectItem>
-                      <SelectItem value="flat">Flat</SelectItem>
-                      <SelectItem value="bundle">Bundle</SelectItem>
+                      <SelectItem value="percentage">Percentage off</SelectItem>
+                      <SelectItem value="flat">Flat amount off (₹)</SelectItem>
+                      <SelectItem value="bundle">Buy 2 Get 1 Free</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1"><Label className="text-xs">Value</Label><Input type="number" value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) })} /></div>
+                {form.discountType === "percentage" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Percent off (%)</Label>
+                    <Input type="number" min={1} max={100} value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) || 0 })} placeholder="e.g. 10" />
+                    <p className="text-[10px] text-muted-foreground">e.g. 10 for 10% off order</p>
+                  </div>
+                )}
+                {form.discountType === "flat" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Amount off (₹)</Label>
+                    <Input type="number" min={0} value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) || 0 })} placeholder="e.g. 200" />
+                    <p className="text-[10px] text-muted-foreground">e.g. 200 for Rs. 200 off</p>
+                  </div>
+                )}
+                {form.discountType === "bundle" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Value</Label>
+                    <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground">Not used</div>
+                    <p className="text-[10px] text-muted-foreground">Cheapest item free per 3 items in cart</p>
+                  </div>
+                )}
               </div>
-              <div className="space-y-1"><Label className="text-xs">Code (optional)</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="SUMMER20" /></div>
+              <div className="space-y-1"><Label className="text-xs">Code (optional)</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="B2G1, SUMMER20" /></div>
+              <div className="flex items-center gap-2"><Switch checked={form.firstOrderOnly} onCheckedChange={(v) => setForm({ ...form, firstOrderOnly: v })} /><Label className="text-xs">First order only</Label></div>
+              <p className="text-[10px] text-muted-foreground -mt-2">When enabled, this code applies only to customers who have never placed an order before.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1"><Label className="text-xs">Start Date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Optional — when promo becomes valid</p></div>
+                <div className="space-y-1"><Label className="text-xs">End Date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Optional — when promo expires</p></div>
+              </div>
+              <div className="flex items-center gap-2"><Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} /><Label className="text-xs">Active</Label></div>
               <Button className="w-full" onClick={() => addMutation.mutate()} disabled={!form.title || addMutation.isPending} data-testid="button-save-promo">
                 {addMutation.isPending ? "Saving..." : "Save Promotion"}
               </Button>
@@ -866,17 +895,132 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
             <div>
               <p className="text-sm font-semibold">{promo.title}</p>
               <p className="text-xs text-muted-foreground">{promo.description}</p>
-              {promo.code && <Badge variant="outline" className="text-xs mt-1 font-mono">{promo.code}</Badge>}
+              <div className="flex flex-wrap gap-1 mt-1">
+                {promo.code && <Badge variant="outline" className="text-xs font-mono">{promo.code}</Badge>}
+                <span className="text-[10px] text-muted-foreground">{promo.discountType} · {promo.discountValue}{promo.discountType === "percentage" ? "%" : ""}</span>
+                {(promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly && <Badge variant="secondary" className="text-[10px]">First order</Badge>}
+              </div>
             </div>
-            <Switch
-              checked={promo.isActive}
-              onCheckedChange={(v) => toggleMutation.mutate({ id: promo.id, isActive: v })}
-              data-testid={`switch-promo-${promo.id}`}
-            />
+            <div className="flex items-center gap-2">
+              <EditPromoDialog promo={promo} />
+              <Switch
+                checked={promo.isActive}
+                onCheckedChange={(v) => toggleMutation.mutate({ id: promo.id, isActive: v })}
+                data-testid={`switch-promo-${promo.id}`}
+              />
+            </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function EditPromoDialog({ promo }: { promo: Promotion }) {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    title: promo.title,
+    description: promo.description,
+    discountType: promo.discountType,
+    discountValue: promo.discountValue,
+    code: promo.code || "",
+    isActive: promo.isActive,
+    firstOrderOnly: (promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly ?? false,
+    startDate: promo.startDate ? new Date(promo.startDate).toISOString().slice(0, 10) : "",
+    endDate: promo.endDate ? new Date(promo.endDate).toISOString().slice(0, 10) : "",
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("PATCH", `/api/admin/promotions/${promo.id}`, {
+        title: form.title,
+        description: form.description,
+        discountType: form.discountType,
+        discountValue: form.discountValue,
+        code: form.code || null,
+        isActive: form.isActive,
+        firstOrderOnly: form.firstOrderOnly,
+        startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
+        endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
+      toast({ title: "Promotion updated" });
+      setOpen(false);
+    },
+    onError: () => toast({ title: "Failed to update", variant: "destructive" }),
+  });
+
+  const resetForm = () => {
+    setForm({
+      title: promo.title,
+      description: promo.description,
+      discountType: promo.discountType,
+      discountValue: promo.discountValue,
+      code: promo.code || "",
+      isActive: promo.isActive,
+      firstOrderOnly: (promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly ?? false,
+      startDate: promo.startDate ? new Date(promo.startDate).toISOString().slice(0, 10) : "",
+      endDate: promo.endDate ? new Date(promo.endDate).toISOString().slice(0, 10) : "",
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (o) resetForm(); }}>
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost" data-testid={`button-edit-promo-${promo.id}`}><Pencil className="w-4 h-4 text-muted-foreground" /></Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Edit Promotion</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1"><Label className="text-xs">Title</Label><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></div>
+          <div className="space-y-1"><Label className="text-xs">Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs">Discount Type</Label>
+              <Select value={form.discountType} onValueChange={(v) => setForm({ ...form, discountType: v, discountValue: v === "bundle" ? 0 : form.discountValue })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="percentage">Percentage off</SelectItem>
+                  <SelectItem value="flat">Flat amount off (₹)</SelectItem>
+                  <SelectItem value="bundle">Buy 2 Get 1 Free</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {form.discountType === "percentage" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Percent off (%)</Label>
+                <Input type="number" min={1} max={100} value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) || 0 })} />
+              </div>
+            )}
+            {form.discountType === "flat" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Amount off (₹)</Label>
+                <Input type="number" min={0} value={form.discountValue} onChange={(e) => setForm({ ...form, discountValue: Number(e.target.value) || 0 })} />
+              </div>
+            )}
+            {form.discountType === "bundle" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Value</Label>
+                <div className="flex h-9 items-center rounded-md border bg-muted px-3 text-sm text-muted-foreground">Not used</div>
+              </div>
+            )}
+          </div>
+          <div className="space-y-1"><Label className="text-xs">Code (optional)</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="B2G1" /></div>
+          <div className="flex items-center gap-2"><Switch checked={form.firstOrderOnly} onCheckedChange={(v) => setForm({ ...form, firstOrderOnly: v })} /><Label className="text-xs">First order only</Label></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1"><Label className="text-xs">Start Date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Leave empty for no start</p></div>
+            <div className="space-y-1"><Label className="text-xs">End Date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Leave empty for no expiry</p></div>
+          </div>
+          <div className="flex items-center gap-2"><Switch checked={form.isActive} onCheckedChange={(v) => setForm({ ...form, isActive: v })} /><Label className="text-xs">Active</Label></div>
+          <Button className="w-full" onClick={() => editMutation.mutate()} disabled={!form.title || editMutation.isPending} data-testid="button-update-promo">
+            {editMutation.isPending ? "Updating..." : "Update Promotion"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

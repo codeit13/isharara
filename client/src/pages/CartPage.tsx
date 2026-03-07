@@ -1,13 +1,22 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import confetti from "canvas-confetti";
 import { Link } from "wouter";
-import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Shield, RotateCcw, Zap, ChevronRight } from "lucide-react";
+import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, Shield, RotateCcw, Zap, ChevronRight, Tag, X, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useCart } from "@/lib/cart";
+import { useCartPromo } from "@/lib/cart-promo";
 import { useSettings } from "@/hooks/use-settings";
+import { useToast } from "@/hooks/use-toast";
 import ProductCard from "@/components/ProductCard";
 import SEOHead from "@/components/SEOHead";
 import type { ProductWithSizes } from "@shared/schema";
@@ -128,12 +137,109 @@ function SuggestedProducts({ cartProductIds }: { cartProductIds: number[] }) {
   );
 }
 
+// ── Promo code section ────────────────────────────────────────────────────────
+function PromoSection() {
+  const { toast } = useToast();
+  const [promoInput, setPromoInput] = useState("");
+  const [applying, setApplying] = useState(false);
+  const {
+    appliedPromo,
+    discountAmount,
+    applyPromo,
+    removePromo,
+    getPromoEffectText,
+    bundleItemsNeeded,
+    hasPromoCodes,
+  } = useCartPromo();
+
+  const handleApply = async () => {
+    if (!promoInput.trim()) return;
+    setApplying(true);
+    const result = await applyPromo(promoInput);
+    setApplying(false);
+    if (result.success) {
+      toast({ title: `Code "${promoInput.trim().toUpperCase()}" applied` });
+      setPromoInput("");
+    } else {
+      toast({ title: result.reason, variant: "destructive" });
+    }
+  };
+
+  if (!hasPromoCodes) return null;
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card p-4 shadow-sm">
+      <h4 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/90 mb-3 flex items-center gap-2">
+        <Tag className="w-3.5 h-3.5 opacity-70" />
+        Discount Code
+      </h4>
+      {appliedPromo ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 px-3 py-2.5 border-l-2 border-l-emerald-500">
+          <div className="flex items-center gap-2">
+          <span className="inline-flex items-center rounded-md border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 font-mono text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+            {appliedPromo.code}
+          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                className="rounded-full p-1 text-muted-foreground/80 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors shrink-0"
+                aria-label="Promo details"
+              >
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-[260px] text-left py-2.5 px-3">
+              <p className="text-sm leading-relaxed">{getPromoEffectText(appliedPromo)}</p>
+            </TooltipContent>
+          </Tooltip>
+          </div>
+          {bundleItemsNeeded > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-500 whitespace-nowrap">
+              Add {bundleItemsNeeded} more item{bundleItemsNeeded > 1 ? "s" : ""} to unlock
+            </span>
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 shrink-0 rounded-full text-muted-foreground/70 hover:text-muted-foreground hover:bg-muted"
+            onClick={removePromo}
+            aria-label="Remove code"
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <Input
+            placeholder="Enter code"
+            value={promoInput}
+            onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === "Enter" && handleApply()}
+            className="flex-1 h-10"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 px-4"
+            onClick={handleApply}
+            disabled={!promoInput.trim() || applying}
+          >
+            {applying ? "Applying…" : "Apply"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main cart page ────────────────────────────────────────────────────────────
 export default function CartPage() {
   const { items, updateQuantity, removeItem, totalPrice } = useCart();
+  const { appliedPromo, discountAmount } = useCartPromo();
   const { shippingFee, freeShippingThreshold } = useSettings();
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
-  const grandTotal = totalPrice + shipping;
+  const grandTotal = Math.max(0, totalPrice + shipping - discountAmount);
   const cartProductIds = items.map((i) => i.productId);
 
   if (items.length === 0) {
@@ -238,13 +344,9 @@ export default function CartPage() {
             </div>
           ))}
 
-          {/* Promo code nudge — stacks cleanly on all screen sizes */}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-3 rounded-xl border border-dashed bg-muted/30 text-xs text-muted-foreground">
-            <span>🏷️</span>
-            <span>Have a discount code? Apply it at checkout.</span>
-            <Link href="/checkout" className="text-primary font-medium hover:underline whitespace-nowrap">
-              Go to checkout →
-            </Link>
+          {/* Promo code section — mobile only (desktop: in order summary below checkout) */}
+          <div className="md:hidden">
+            <PromoSection />
           </div>
         </div>
 
@@ -257,6 +359,12 @@ export default function CartPage() {
                 <span className="text-muted-foreground">Subtotal ({items.reduce((s, i) => s + i.quantity, 0)} items)</span>
                 <span>Rs. {totalPrice.toLocaleString()}</span>
               </div>
+              {appliedPromo && discountAmount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span className="text-muted-foreground">Discount ({appliedPromo.code})</span>
+                  <span className="font-medium">- Rs. {discountAmount.toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
                 <span className={shipping === 0 ? "text-green-600 font-medium" : ""}>
@@ -279,6 +387,9 @@ export default function CartPage() {
                 Proceed to Checkout
               </Button>
             </Link>
+            <div className="mt-4">
+              <PromoSection />
+            </div>
             <TrustBadges />
           </div>
         </div>
