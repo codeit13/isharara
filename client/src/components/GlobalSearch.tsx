@@ -118,8 +118,8 @@ export default function GlobalSearch({
           role="listbox"
           className={
             fullWidthDropdown
-              ? "fixed left-0 right-0 top-16 border-b bg-popover text-popover-foreground shadow-lg z-[60] max-h-[min(60vh,400px)] overflow-y-auto"
-              : "absolute top-full left-0 right-0 mt-1 rounded-lg border bg-popover text-popover-foreground shadow-lg z-50 max-h-[min(70vh,400px)] overflow-y-auto"
+              ? "fixed left-0 right-0 top-16 border-b bg-popover text-popover-foreground shadow-lg z-[60] max-h-[min(60vh,400px)] flex flex-col"
+              : "absolute top-full left-0 right-0 mt-1 rounded-lg border bg-popover text-popover-foreground shadow-lg z-50 max-h-[min(70vh,400px)] flex flex-col"
           }
         >
           {isLoading && debouncedQuery === query.trim() ? (
@@ -128,7 +128,7 @@ export default function GlobalSearch({
             <div className="p-4 text-center text-sm text-muted-foreground">No products found for &quot;{query.trim()}&quot;</div>
           ) : (
             <>
-              <ul className="py-1">
+              <ul className="py-1 min-h-0 flex-1 overflow-y-auto">
                 {displayResults.map((product) => {
                   const minPrice = product.sizes.length > 0
                     ? Math.min(...product.sizes.map((s) => s.price))
@@ -163,7 +163,7 @@ export default function GlobalSearch({
                   );
                 })}
               </ul>
-              <div className="border-t p-2">
+              <div className="border-t p-2 shrink-0 bg-popover">
                 <Link
                   href={`/shop?search=${encodeURIComponent(query.trim())}`}
                   onClick={() => {
