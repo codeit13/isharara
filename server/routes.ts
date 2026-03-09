@@ -1042,6 +1042,36 @@ export async function registerRoutes(
   });
 
   // ── Domain DNS verification ───────────────────────────────────────────────
+  // Apex (e.g. example.com) → use A record. Subdomain (e.g. shop.example.com) → use CNAME.
+  const isApexDomain = (d: string) => d.split(".").filter(Boolean).length <= 2;
+
+  app.get("/api/super-admin/tenants/:id/domain-info", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+      if (!tenant.domain) return res.status(400).json({ message: "No domain configured" });
+      const domain = tenant.domain;
+      const serverHost = req.get("host")?.split(":")[0] ?? "localhost";
+      const apex = isApexDomain(domain);
+      let serverIp: string | null = null;
+      try {
+        const ips = await dns.resolve4(serverHost);
+        serverIp = ips[0] ?? null;
+      } catch {}
+      res.json({
+        serverHost,
+        serverIp,
+        recordType: apex ? "A" : "CNAME",
+        record: apex
+          ? { type: "A", host: "@", value: serverIp ?? serverHost, ttl: 3600 }
+          : { type: "CNAME", host: domain, value: serverHost, ttl: 3600 },
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
   app.post("/api/super-admin/tenants/:id/verify-domain", isAuthenticated, requireSuperAdmin, async (req, res) => {
     try {
       const tenantId = Number(req.params.id);
@@ -1052,39 +1082,54 @@ export async function registerRoutes(
       const domain = tenant.domain;
       const serverHost = req.get("host")?.split(":")[0] ?? "localhost";
       const checks: { type: string; status: "pass" | "fail" | "warn"; detail: string }[] = [];
+      const apex = isApexDomain(domain);
 
-      // 1. CNAME check
+      // Resolve server IP once (for apex A-record comparison and instructions)
+      let serverIps: string[] = [];
       try {
-        const cnames = await dns.resolveCname(domain);
-        const cnameMatch = cnames.some(
-          (rec) => rec.replace(/\.$/, "").toLowerCase() === serverHost.toLowerCase()
-        );
-        checks.push({
-          type: "CNAME",
-          status: cnameMatch ? "pass" : "warn",
-          detail: cnameMatch
-            ? `CNAME ${domain} → ${cnames[0]} ✓`
-            : `CNAME resolves to ${cnames.join(", ")} (expected ${serverHost})`,
-        });
-      } catch {
-        checks.push({ type: "CNAME", status: "fail", detail: `No CNAME record found for ${domain}` });
-      }
+        serverIps = await dns.resolve4(serverHost);
+      } catch {}
 
-      // 2. A record check (fallback if no CNAME)
-      try {
-        const aRecords = await dns.resolve4(domain);
-        let serverIp: string[] = [];
-        try { serverIp = await dns.resolve4(serverHost); } catch {}
-        const aMatch = serverIp.length > 0 && aRecords.some((ip) => serverIp.includes(ip));
-        checks.push({
-          type: "A",
-          status: aMatch ? "pass" : aRecords.length > 0 ? "warn" : "fail",
-          detail: aRecords.length > 0
-            ? `A record(s): ${aRecords.join(", ")}${aMatch ? " ✓" : ` (server IP: ${serverIp.join(", ") || "unknown"})`}`
-            : `No A record found for ${domain}`,
-        });
-      } catch {
-        checks.push({ type: "A", status: "fail", detail: `No A record found for ${domain}` });
+      if (apex) {
+        // Apex domain: require A record pointing to our server IP
+        try {
+          const aRecords = await dns.resolve4(domain);
+          const aMatch = serverIps.length > 0 && aRecords.some((ip) => serverIps.includes(ip));
+          checks.push({
+            type: "A",
+            status: aMatch ? "pass" : aRecords.length > 0 ? "warn" : "fail",
+            detail: aRecords.length > 0
+              ? `A record(s): ${aRecords.join(", ")}${aMatch ? " ✓" : ` (expected server IP: ${serverIps.join(", ") || "unknown"})`}`
+              : `No A record found for ${domain}. Add an A record pointing to your server IP.`,
+          });
+        } catch {
+          checks.push({
+            type: "A",
+            status: "fail",
+            detail: `No A record found for ${domain}. Root/apex domains must use an A record (not CNAME).`,
+          });
+        }
+      } else {
+        // Subdomain: require CNAME pointing to server hostname
+        try {
+          const cnames = await dns.resolveCname(domain);
+          const cnameMatch = cnames.some(
+            (rec) => rec.replace(/\.$/, "").toLowerCase() === serverHost.toLowerCase()
+          );
+          checks.push({
+            type: "CNAME",
+            status: cnameMatch ? "pass" : "warn",
+            detail: cnameMatch
+              ? `CNAME ${domain} → ${cnames[0]} ✓`
+              : `CNAME resolves to ${cnames.join(", ")} (expected ${serverHost})`,
+          });
+        } catch {
+          checks.push({
+            type: "CNAME",
+            status: "fail",
+            detail: `No CNAME record found for ${domain}. Add a CNAME record pointing to ${serverHost}.`,
+          });
+        }
       }
 
       // 3. HTTP reachability — does the domain actually reach us?
@@ -1140,9 +1185,10 @@ export async function registerRoutes(
         }
       }
 
-      const allPass = checks.some((c) => c.status === "pass" && (c.type === "CNAME" || c.type === "A"))
-        && checks.some((c) => c.status === "pass" && (c.type === "HTTPS" || c.type === "HTTP"));
-      const dnsReady = checks.some((c) => c.status === "pass" && (c.type === "CNAME" || c.type === "A"));
+      const dnsRecordCheck = checks.find((c) => c.type === "A" || c.type === "CNAME");
+      const dnsReady = dnsRecordCheck?.status === "pass";
+      const reachable = checks.some((c) => c.status === "pass" && (c.type === "HTTPS" || c.type === "HTTP"));
+      const allPass = dnsReady && reachable;
 
       if (allPass) {
         await db.update(tenants).set({ domainVerified: true, domainVerifiedAt: new Date() }).where(eq(tenants.id, tenantId));
@@ -1152,17 +1198,25 @@ export async function registerRoutes(
         invalidateTenantCache();
       }
 
+      const serverIp = serverIps[0] ?? null;
       res.json({
         verified: allPass,
         dnsReady,
         checks,
         serverHost,
+        recordType: apex ? "A" : "CNAME",
         instructions: {
+          recordType: apex ? "A" : "CNAME",
+          record: apex
+            ? { type: "A", host: "@", value: serverIp ?? serverHost, ttl: 3600 }
+            : { type: "CNAME", host: domain, value: serverHost, ttl: 3600 },
           cname: { type: "CNAME", host: domain, value: serverHost, ttl: 3600 },
           ...(allPass ? {} : {
             note: dnsReady
               ? "DNS is pointing correctly but the domain is not yet reachable via HTTPS. Ensure your reverse proxy / CDN is configured."
-              : `Add a CNAME record for "${domain}" pointing to "${serverHost}". DNS propagation can take up to 48 hours.`,
+              : apex
+                ? `Add an A record for "${domain}" (or @) pointing to your server IP${serverIp ? ` (${serverIp})` : ""}. DNS propagation can take up to 48 hours.`
+                : `Add a CNAME record for "${domain}" pointing to "${serverHost}". DNS propagation can take up to 48 hours.`,
           }),
         },
       });

@@ -184,6 +184,10 @@ export default function Navbar() {
           />
         )}
 
+        <div className="hidden md:block flex-1 max-w-md mx-2">
+          <GlobalSearch />
+        </div>
+
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
             <Link key={link.href} href={link.href}>
@@ -200,10 +204,6 @@ export default function Navbar() {
             </Link>
           ))}
         </nav>
-
-        <div className="hidden md:block flex-1 max-w-md mx-2">
-          <GlobalSearch />
-        </div>
 
         <div className="flex items-center gap-1 shrink-0">
           {isLoading ? (
