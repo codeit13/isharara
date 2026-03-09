@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, decimal, jsonb, serial, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -7,6 +7,7 @@ export * from "./models/auth";
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   name: text("name").notNull(),
   brand: text("brand").notNull().default("ISHQARA"),
   description: text("description").notNull(),
@@ -44,6 +45,7 @@ export const reviews = pgTable("reviews", {
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   userId: varchar("user_id"),
   customerName: text("customer_name").notNull(),
   email: text("email").notNull(),
@@ -80,6 +82,7 @@ export const addresses = pgTable("addresses", {
 
 export const promotions = pgTable("promotions", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   title: text("title").notNull(),
   description: text("description").notNull(),
   discountType: text("discount_type").notNull(),
@@ -93,6 +96,7 @@ export const promotions = pgTable("promotions", {
 
 export const subscribers = pgTable("subscribers", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
   email: text("email"),
   phone: text("phone"),
   source: text("source").notNull().default("popup"),
@@ -100,13 +104,15 @@ export const subscribers = pgTable("subscribers", {
 });
 
 export const settings = pgTable("settings", {
-  key: text("key").primaryKey(),
+  id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").notNull().default(1),
+  key: text("key").notNull(),
   value: text("value").notNull(),
-  label: text("label").notNull(),       // human-readable name shown in admin
-  description: text("description"),     // helper text shown in admin
+  label: text("label").notNull(),
+  description: text("description"),
   type: text("type").notNull().default("string"), // 'string' | 'number' | 'boolean'
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
-});
+}, (table) => [uniqueIndex("settings_tenant_key_idx").on(table.tenantId, table.key)]);
 
 export type Setting = typeof settings.$inferSelect;
 

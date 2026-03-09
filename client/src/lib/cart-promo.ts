@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
+import { getTenantSlug } from "@/hooks/use-tenant";
 import type { Promotion } from "@shared/schema";
 
-const PROMO_KEY = "ishqara_cart_promo";
+function promoKey(): string {
+  return `cart_promo_${getTenantSlug()}`;
+}
 
 function getStoredPromo(): Promotion | null {
   try {
-    const data = localStorage.getItem(PROMO_KEY);
+    const data = localStorage.getItem(promoKey());
     return data ? JSON.parse(data) : null;
   } catch {
     return null;
@@ -16,9 +19,9 @@ function getStoredPromo(): Promotion | null {
 
 function savePromo(promo: Promotion | null) {
   if (promo) {
-    localStorage.setItem(PROMO_KEY, JSON.stringify(promo));
+    localStorage.setItem(promoKey(), JSON.stringify(promo));
   } else {
-    localStorage.removeItem(PROMO_KEY);
+    localStorage.removeItem(promoKey());
   }
   window.dispatchEvent(new Event("cart-promo-updated"));
 }
@@ -109,6 +112,18 @@ export function useCartPromo() {
     return minForDiscount - totalUnits;
   })();
 
+  /** Active promos with a code, within date range (for showing "available offers" on cart). */
+  const availablePromos = (() => {
+    if (!promotions) return [];
+    const now = new Date();
+    return promotions.filter((p) => {
+      if (!p.isActive || !p.code?.trim()) return false;
+      if (p.startDate && new Date(p.startDate) > now) return false;
+      if (p.endDate && new Date(p.endDate) < now) return false;
+      return true;
+    });
+  })();
+
   return {
     appliedPromo,
     discountAmount,
@@ -118,5 +133,6 @@ export function useCartPromo() {
     getPromoEffectText,
     bundleItemsNeeded,
     hasPromoCodes: !!(promotions?.some((p) => p.isActive && p.code)),
+    availablePromos,
   };
 }

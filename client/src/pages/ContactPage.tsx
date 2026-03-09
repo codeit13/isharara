@@ -3,40 +3,29 @@ import { useSettings } from "@/hooks/use-settings";
 import SEOHead from "@/components/SEOHead";
 
 export default function ContactPage() {
-  const { storeEmail, storePhone } = useSettings();
+  const { storeEmail, storePhone, storeName, contactAddress, contactHours, socialInstagramUrl } = useSettings();
 
   const waPhone = storePhone.replace(/\D/g, "");
 
   const localBusinessSchema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "ISHQARA",
-    "url": "https://ishqara.com",
-    "logo": "https://ishqara.com/logo.png",
-    "image": "https://ishqara.com/og-image.png",
-    "description": "Premium fragrance brand offering authentic and recreation perfumes online.",
+    "name": storeName,
+    "description": `${storeName} — contact us for any questions.`,
     "telephone": storePhone,
     "email": storeEmail,
     "address": {
       "@type": "PostalAddress",
-      "addressLocality": "Mumbai",
-      "addressRegion": "Maharashtra",
-      "addressCountry": "IN",
+      "addressLocality": contactAddress,
     },
-    "openingHoursSpecification": {
-      "@type": "OpeningHoursSpecification",
-      "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
-      "opens": "10:00",
-      "closes": "18:00",
-    },
-    "sameAs": ["https://www.instagram.com/ishqaraperfumes"],
+    ...(socialInstagramUrl ? { "sameAs": [socialInstagramUrl] } : {}),
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-10" data-testid="page-contact">
       <SEOHead
         title="Contact Us"
-        description="Get in touch with ISHQARA. Reach us by phone, WhatsApp or email for orders, products, or partnership enquiries."
+        description={`Get in touch with ${storeName}. Reach us by phone, WhatsApp or email for orders, products, or partnership enquiries.`}
         canonicalPath="/contact"
         jsonLd={localBusinessSchema}
       />
@@ -70,15 +59,12 @@ export default function ContactPage() {
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Customer care hours</p>
-            <p>Monday to Saturday, 10:00 am – 6:00 pm IST (excluding public holidays)</p>
+            <p>{contactHours}</p>
           </div>
 
           <div className="space-y-1">
             <p className="font-semibold text-foreground">Registered address</p>
-            <p>
-              Mumbai, Maharashtra.<br />
-              India
-            </p>
+            <p className="whitespace-pre-line">{contactAddress}</p>
           </div>
 
           <p className="text-xs mt-6">Last updated: {new Date().getFullYear()}</p>

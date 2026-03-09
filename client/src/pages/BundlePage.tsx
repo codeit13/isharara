@@ -7,14 +7,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useCart } from "@/lib/cart";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-settings";
 import type { ProductWithSizes } from "@shared/schema";
 
-const BUNDLE_CONFIGS = [
-  { count: 2, discount: 10, label: "Pick 2" },
-  { count: 3, discount: 15, label: "Pick 3" },
-];
-
 export default function BundlePage() {
+  const { bundleConfig: BUNDLE_CONFIGS, copyBundleTitle, copyBundleSubtitle, storeName } = useSettings();
   const { data: products, isLoading } = useQuery<ProductWithSizes[]>({
     queryKey: ["/api/products"],
   });
@@ -73,8 +70,8 @@ export default function BundlePage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8" data-testid="page-bundles">
       <SEOHead
-        title="Build Your Own Fragrance Bundle"
-        description="Create your perfect fragrance bundle at ISHQARA. Mix and match luxury perfumes, save more when you buy together. Perfect as a gift."
+        title={`${copyBundleTitle} — ${storeName}`}
+        description={`${copyBundleSubtitle} Create your perfect bundle at ${storeName}.`}
         canonicalPath="/bundles"
       />
       <div className="text-center mb-8">
@@ -82,10 +79,10 @@ export default function BundlePage() {
           <Gift className="w-6 h-6 text-primary" />
         </div>
         <h1 className="font-serif text-2xl md:text-3xl font-bold mb-2" data-testid="text-bundle-title">
-          Build Your Own Bundle
+          {copyBundleTitle}
         </h1>
         <p className="text-sm text-muted-foreground max-w-md mx-auto">
-          Pick your favorite fragrances and save big. Perfect for gifting or treating yourself!
+          {copyBundleSubtitle}
         </p>
       </div>
 

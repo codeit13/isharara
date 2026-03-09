@@ -9,7 +9,7 @@ function isCloudinaryConfigured(): boolean {
 }
 
 /** Upload to Cloudinary (fallback when Replit unavailable) */
-async function uploadToCloudinary(buffer: Buffer, mimetype: string, publicId: string): Promise<string> {
+async function uploadToCloudinary(buffer: Buffer, mimetype: string, publicId: string, folder = "ishqara/products"): Promise<string> {
   const { v2: cloudinary } = await import("cloudinary");
   cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -19,7 +19,7 @@ async function uploadToCloudinary(buffer: Buffer, mimetype: string, publicId: st
   const dataUri = `data:${mimetype};base64,${buffer.toString("base64")}`;
   const result = await cloudinary.uploader.upload(dataUri, {
     public_id: publicId,
-    folder: "ishqara/products",
+    folder,
   });
   return result.secure_url;
 }
@@ -55,20 +55,39 @@ export function isAllowedImage(mimetype: string, size: number): boolean {
   return ALLOWED_TYPES.includes(mimetype) && size <= MAX_SIZE_BYTES;
 }
 
-/** Upload a single image (for Add/Edit modal) — returns public URL */
-export async function uploadSingleImage(buffer: Buffer, mimetype: string): Promise<string> {
+/** Upload a tenant logo — returns public URL */
+export async function uploadLogo(buffer: Buffer, mimetype: string, tenantSlug: string): Promise<string> {
   const ext = mimetype === "image/jpeg" ? "jpg" : mimetype === "image/png" ? "png" : "webp";
-  const objectName = `${PRODUCTS_PREFIX}${randomUUID()}.${ext}`;
+  const objectName = `${tenantSlug}/logo.${ext}`;
+  if (isCloudinaryConfigured()) {
+    return uploadToCloudinary(buffer, mimetype, `${tenantSlug}/logo`, `${tenantSlug}`);
+  }
   try {
     const client = await getClient();
     const { ok, error } = await client.uploadFromBytes(objectName, buffer);
     if (!ok) throw new Error(error?.message ?? "Upload failed");
     return `/api/uploads/${objectName}`;
   } catch {
-    if (isCloudinaryConfigured()) {
-      return uploadToCloudinary(buffer, mimetype, objectName.replace(/\.[^.]+$/, ""));
-    }
-    throw new Error("Replit Object Storage is not available. Add Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) or use /images/ paths.");
+    throw new Error("Add Cloudinary credentials (CLOUDINARY_*) or use Replit Object Storage.");
+  }
+}
+
+/** Upload a single image (for Add/Edit modal) — returns public URL */
+export async function uploadSingleImage(buffer: Buffer, mimetype: string, tenantSlug?: string): Promise<string> {
+  const ext = mimetype === "image/jpeg" ? "jpg" : mimetype === "image/png" ? "png" : "webp";
+  const prefix = tenantSlug ? `${tenantSlug}/products/` : PRODUCTS_PREFIX;
+  const objectName = `${prefix}${randomUUID()}.${ext}`;
+  if (isCloudinaryConfigured()) {
+    const folder = tenantSlug ? `${tenantSlug}/products` : "ishqara/products";
+    return uploadToCloudinary(buffer, mimetype, objectName.replace(/\.[^.]+$/, ""), folder);
+  }
+  try {
+    const client = await getClient();
+    const { ok, error } = await client.uploadFromBytes(objectName, buffer);
+    if (!ok) throw new Error(error?.message ?? "Upload failed");
+    return `/api/uploads/${objectName}`;
+  } catch {
+    throw new Error("Add Cloudinary credentials (CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET) or use /images/ paths.");
   }
 }
 
@@ -76,22 +95,25 @@ export async function uploadSingleImage(buffer: Buffer, mimetype: string): Promi
 export async function uploadImageByFilename(
   buffer: Buffer,
   mimetype: string,
-  originalFilename: string
+  originalFilename: string,
+  tenantSlug?: string
 ): Promise<string> {
   const base = originalFilename.replace(/\.[^.]+$/, "");
   const sanitized = sanitizeProductName(base);
   const ext = mimetype === "image/jpeg" ? "jpg" : mimetype === "image/png" ? "png" : "webp";
-  const objectName = `${PRODUCTS_PREFIX}${sanitized}.${ext}`;
+  const prefix = tenantSlug ? `${tenantSlug}/products/` : PRODUCTS_PREFIX;
+  const objectName = `${prefix}${sanitized}.${ext}`;
+  if (isCloudinaryConfigured()) {
+    const folder = tenantSlug ? `${tenantSlug}/products` : "ishqara/products";
+    return uploadToCloudinary(buffer, mimetype, `${folder}/${sanitized}`, folder);
+  }
   try {
     const client = await getClient();
     const { ok, error } = await client.uploadFromBytes(objectName, buffer);
     if (!ok) throw new Error(error?.message ?? "Upload failed");
     return `/api/uploads/${objectName}`;
   } catch {
-    if (isCloudinaryConfigured()) {
-      return uploadToCloudinary(buffer, mimetype, `products/${sanitized}`);
-    }
-    throw new Error("Replit Object Storage is not available. Add Cloudinary credentials or use /images/ paths.");
+    throw new Error("Add Cloudinary credentials (CLOUDINARY_*) or use /images/ paths.");
   }
 }
 

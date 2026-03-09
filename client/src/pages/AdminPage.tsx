@@ -1312,18 +1312,19 @@ function SettingsTab() {
 
 export default function AdminPage() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
+  const isTenantAdmin = user?.tenantRole === "owner" || user?.tenantRole === "admin";
   const { data: products, isLoading: prodLoading } = useQuery<ProductWithSizes[]>({
     queryKey: ["/api/admin/products"],
-    enabled: !!user?.isAdmin,
+    enabled: !!isTenantAdmin,
   });
   const { data: orders, isLoading: ordLoading } = useQuery<Order[]>({
     queryKey: ["/api/admin/orders"],
-    enabled: !!user?.isAdmin,
+    enabled: !!isTenantAdmin,
   });
   const { data: promotions, isLoading: promoLoading } = useQuery<Promotion[]>({ queryKey: ["/api/promotions"] });
   const { data: subscribers, isLoading: subLoading } = useQuery<Subscriber[]>({
     queryKey: ["/api/admin/subscribers"],
-    enabled: !!user?.isAdmin,
+    enabled: !!isTenantAdmin,
   });
 
   if (authLoading) {
@@ -1342,7 +1343,7 @@ export default function AdminPage() {
     return <AdminLoginPage />;
   }
 
-  if (!user?.isAdmin) {
+  if (!isTenantAdmin) {
     return (
       <div className="max-w-md mx-auto px-4 py-16 text-center" data-testid="admin-access-denied">
         <ShieldAlert className="w-12 h-12 mx-auto text-destructive mb-4" />

@@ -7,6 +7,9 @@ import { Strategy as GoogleStrategy, type Profile } from "passport-google-oauth2
 import { OAuth2Client } from "google-auth-library";
 import { authStorage } from "./storage";
 import type { User } from "@shared/models/auth";
+import { tenantMembers } from "@shared/schema";
+import { db } from "../db";
+import { eq, and } from "drizzle-orm";
 
 const DEMO_USER_ID = "demo";
 
@@ -51,7 +54,9 @@ declare global {
       profileImageUrl?: string | null;
       phone?: string | null;
       provider?: string | null;
-      isAdmin?: boolean;
+      isSuperAdmin?: boolean;
+      /** Computed per-request: role for the current tenant (null = not a member) */
+      tenantRole?: string | null;
     }
   }
 }
@@ -390,12 +395,24 @@ export async function setupAuth(app: Express): Promise<void> {
     req.session.destroy(() => res.redirect("/"));
   });
 
-  // Current user
+  // Current user — includes tenantRole for the current tenant
   app.get("/api/auth/user", isAuthenticated, async (req, res) => {
     try {
       const user = await authStorage.getUser(req.user!.id);
       if (!user) return res.status(404).json({ message: "User not found" });
-      res.json(toPublicUser(user));
+      const pub = toPublicUser(user);
+
+      // Compute tenantRole for the requesting tenant
+      let tenantRole: string | null = null;
+      const tenant = (req as any).tenant;
+      if (tenant?.id) {
+        const membership = await authStorage.getTenantMembership(user.id, tenant.id);
+        tenantRole = membership?.role ?? null;
+      }
+      // Super-admins have implicit 'owner' access everywhere
+      if (user.isSuperAdmin && !tenantRole) tenantRole = "owner";
+
+      res.json({ ...pub, tenantRole });
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
@@ -427,12 +444,40 @@ export const optionalAuth: RequestHandler = async (req, res, next) => {
   next();
 };
 
-export const requireAdmin: RequestHandler = async (req, res, next) => {
+/**
+ * requireTenantAdmin: checks if the current user has 'owner' or 'admin' role
+ * for the current tenant (via req.tenant.id from resolveTenant middleware).
+ */
+export const requireTenantAdmin: RequestHandler = async (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-  if (!req.user.isAdmin) {
-    return res.status(403).json({ message: "Admin access required" });
+  if (req.user.isSuperAdmin) return next();
+
+  const tenant = (req as any).tenant;
+  if (tenant?.id) {
+    const [membership] = await db
+      .select()
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenant.id), eq(tenantMembers.userId, req.user.id)));
+    if (membership && (membership.role === "owner" || membership.role === "admin")) {
+      return next();
+    }
+  }
+
+  return res.status(403).json({ message: "Admin access required" });
+};
+
+/** Backward-compatible alias — existing routes keep using requireAdmin */
+export const requireAdmin: RequestHandler = requireTenantAdmin;
+
+/** Requires the user to be a platform-level super admin */
+export const requireSuperAdmin: RequestHandler = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  if (!req.user.isSuperAdmin) {
+    return res.status(403).json({ message: "Super admin access required" });
   }
   next();
 };

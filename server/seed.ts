@@ -1,6 +1,6 @@
 import { db } from "./db";
-import { products, productSizes, reviews, promotions, users } from "@shared/schema";
-import { sql, eq } from "drizzle-orm";
+import { products, productSizes, reviews, promotions, users, tenants, tenantMembers } from "@shared/schema";
+import { sql, eq, and } from "drizzle-orm";
 import { authStorage } from "./auth/storage";
 
 export async function seedDatabase() {
@@ -244,8 +244,13 @@ async function ensureAdminUser() {
   const adminEmail = "admin@example.com";
   const [existing] = await db.select().from(users).where(eq(users.email, adminEmail));
   if (existing) {
-    if (!existing.isAdmin) {
-      await db.update(users).set({ isAdmin: true }).where(eq(users.id, existing.id));
+    if (!existing.isSuperAdmin) {
+      await db.update(users).set({ isSuperAdmin: true }).where(eq(users.id, existing.id));
+    }
+    // Ensure tenant membership
+    const [hasMember] = await db.select().from(tenantMembers).where(and(eq(tenantMembers.tenantId, 1), eq(tenantMembers.userId, existing.id)));
+    if (!hasMember) {
+      await db.insert(tenantMembers).values({ tenantId: 1, userId: existing.id, role: "owner" });
     }
     return;
   }
@@ -255,7 +260,8 @@ async function ensureAdminUser() {
     firstName: "Admin",
     lastName: "User",
   });
-  await db.update(users).set({ isAdmin: true }).where(eq(users.id, user.id));
+  await db.update(users).set({ isSuperAdmin: true }).where(eq(users.id, user.id));
+  await db.insert(tenantMembers).values({ tenantId: 1, userId: user.id, role: "owner" });
 }
 
 async function ensureDemoUser() {
@@ -267,6 +273,45 @@ async function ensureDemoUser() {
     firstName: "Demo",
     lastName: "User",
     provider: "email",
-    isAdmin: true,
+    isSuperAdmin: true,
   });
+  await db.insert(tenantMembers).values({ tenantId: 1, userId: "demo", role: "owner" }).onConflictDoNothing();
+}
+
+/**
+ * One-time migration: seed the default tenant, promote existing admins to
+ * tenant_members with 'owner' role, and mark them as isSuperAdmin.
+ */
+export async function migrateMultiTenant() {
+  // 1. Ensure the default tenant exists (id = 1, slug = "ishqara")
+  const [existing] = await db.select().from(tenants).where(eq(tenants.slug, "ishqara"));
+  if (!existing) {
+    await db.insert(tenants).values({
+      id: 1,
+      name: "ISHQARA",
+      slug: "ishqara",
+      domain: "ishqara.com",
+      supportEmail: "ishqaraperfumes@gmail.com",
+      supportPhone: "+91 98679 02305",
+      isActive: true,
+    }).onConflictDoNothing();
+    console.log("[multi-tenant] Default tenant 'ishqara' created.");
+  }
+
+  // 2. Ensure super-admin users are in tenant_members for default tenant
+  const superAdmins = await db.select().from(users).where(eq(users.isSuperAdmin, true));
+  for (const admin of superAdmins) {
+    const [memberExists] = await db
+      .select()
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, 1), eq(tenantMembers.userId, admin.id)));
+    if (!memberExists) {
+      await db.insert(tenantMembers).values({
+        tenantId: 1,
+        userId: admin.id,
+        role: "owner",
+      });
+      console.log(`[multi-tenant] Added super-admin ${admin.email ?? admin.id} → tenant_members (owner)`);
+    }
+  }
 }

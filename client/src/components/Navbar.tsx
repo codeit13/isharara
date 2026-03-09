@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { ShoppingBag, Menu, X, User, LogOut, Package } from "lucide-react";
+import { ShoppingBag, Menu, User, LogOut, Package, Shield, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/hooks/use-auth";
+import { useTenant } from "@/hooks/use-tenant";
+import { useSettings } from "@/hooks/use-settings";
+import GlobalSearch from "@/components/GlobalSearch";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -14,17 +17,29 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/shop", label: "Shop" },
-  { href: "/deals", label: "Deals" },
-];
-
 export default function Navbar() {
   const [location] = useLocation();
   const { totalItems } = useCart();
   const [open, setOpen] = useState(false);
-  const { user, isLoading, isAuthenticated } = useAuth();
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const mobileInputRef = useRef<HTMLInputElement>(null);
+  const { user, isLoading, isAuthenticated, isTenantAdmin } = useAuth();
+  const tenant = useTenant();
+  const { dealsEnabled } = useSettings();
+
+  useEffect(() => {
+    if (mobileSearchOpen && mobileInputRef.current) {
+      setTimeout(() => mobileInputRef.current?.focus(), 150);
+    }
+  }, [mobileSearchOpen]);
+
+  const navLinks = [
+    { href: "/", label: "Home" },
+    { href: "/shop", label: "Shop" },
+    ...(dealsEnabled ? [{ href: "/deals", label: "Deals" }] : []),
+  ];
+  const logoSrc = tenant?.logo || "/logo.png";
+  const logoAlt = tenant?.name || "Store";
 
   const getInitials = () => {
     if (!user) return "U";
@@ -38,7 +53,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 h-16 relative">
 
         {/* Left group: hamburger + logo on mobile; logo only on desktop — stays left */}
-        <div className="flex items-center gap-2 md:gap-4 justify-start">
+        <div className="flex items-center gap-2 md:gap-4 justify-start min-w-0">
         <div className="flex items-center gap-2 md:hidden z-10 shrink-0">
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger asChild>
@@ -51,8 +66,8 @@ export default function Navbar() {
               <div className="flex items-center gap-3 px-5 py-4 border-b">
                 <Link href="/" onClick={() => setOpen(false)}>
                   <img
-                    src="/logo.png"
-                    alt="ISHQARA"
+                    src={logoSrc}
+                    alt={logoAlt}
                     className="h-10 w-auto object-contain cursor-pointer"
                   />
                 </Link>
@@ -82,10 +97,17 @@ export default function Navbar() {
                     </div>
                   </Link>
                 )}
-                {user?.isAdmin && (
+                {isTenantAdmin && (
                   <Link href="/admin" onClick={() => setOpen(false)}>
                     <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer" data-testid="link-mobile-admin">
                       Admin
+                    </div>
+                  </Link>
+                )}
+                {user?.isSuperAdmin && (
+                  <Link href="/platform" onClick={() => setOpen(false)}>
+                    <div className="px-4 py-3 rounded-md text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer">
+                      Platform
                     </div>
                   </Link>
                 )}
@@ -109,13 +131,58 @@ export default function Navbar() {
         {/* Logo — left-aligned on mobile (next to hamburger) */}
         <Link href="/" className="shrink-0">
           <img
-            src="/logo.png"
-            alt="ISHQARA"
+            src={logoSrc}
+            alt={logoAlt}
             className="h-10 md:h-12 w-auto cursor-pointer object-contain"
             data-testid="link-logo"
           />
         </Link>
         </div>
+
+        {/* Mobile: search icon that expands into full-width overlay */}
+        <div className="flex-1 md:hidden" />
+        <Button
+          size="icon"
+          variant="ghost"
+          className="md:hidden shrink-0"
+          onClick={() => setMobileSearchOpen(true)}
+          aria-label="Search"
+        >
+          <Search className="w-5 h-5" />
+        </Button>
+
+        {/* Mobile search overlay */}
+        <div
+          className={`md:hidden fixed inset-x-0 top-0 z-[60] bg-background border-b transition-all duration-200 ease-out ${
+            mobileSearchOpen
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-2 pointer-events-none"
+          }`}
+        >
+          <div className="flex items-center gap-2 px-3 h-16">
+            <Button
+              size="icon"
+              variant="ghost"
+              className="shrink-0"
+              onClick={() => setMobileSearchOpen(false)}
+              aria-label="Close search"
+            >
+              <X className="w-5 h-5" />
+            </Button>
+            <GlobalSearch
+              onNavigate={() => setMobileSearchOpen(false)}
+              className="flex-1 min-w-0"
+              inputRef={mobileInputRef}
+              fullWidthDropdown
+            />
+          </div>
+        </div>
+        {mobileSearchOpen && (
+          <div
+            className="md:hidden fixed inset-0 top-16 z-[55] bg-black/20 backdrop-blur-[1px]"
+            onClick={() => setMobileSearchOpen(false)}
+          />
+        )}
 
         <nav className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => (
@@ -134,7 +201,11 @@ export default function Navbar() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-1">
+        <div className="hidden md:block flex-1 max-w-md mx-2">
+          <GlobalSearch />
+        </div>
+
+        <div className="flex items-center gap-1 shrink-0">
           {isLoading ? (
             <div className="w-8 h-8 rounded-full bg-muted animate-pulse" />
           ) : isAuthenticated ? (
@@ -163,11 +234,19 @@ export default function Navbar() {
                     My Orders
                   </DropdownMenuItem>
                 </Link>
-                {user?.isAdmin && (
+                {isTenantAdmin && (
                   <Link href="/admin">
                     <DropdownMenuItem className="cursor-pointer" data-testid="link-admin">
                       <User className="mr-2 h-4 w-4" />
                       Admin
+                    </DropdownMenuItem>
+                  </Link>
+                )}
+                {user?.isSuperAdmin && (
+                  <Link href="/platform">
+                    <DropdownMenuItem className="cursor-pointer">
+                      <Shield className="mr-2 h-4 w-4" />
+                      Platform
                     </DropdownMenuItem>
                   </Link>
                 )}

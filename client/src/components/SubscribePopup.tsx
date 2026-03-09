@@ -2,21 +2,26 @@ import { useState, useEffect } from "react";
 import { X, Gift } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useSettings } from "@/hooks/use-settings";
+import { getTenantSlug } from "@/hooks/use-tenant";
 
-const STORAGE_KEY = "ishqara_popup";
+function popupKey(): string {
+  return `popup_${getTenantSlug()}`;
+}
+
 const MAX_SHOWS_PER_DAY = 2;
 const DELAY_MS = 4000;
 
 function shouldShowPopup(): boolean {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(popupKey());
     if (!raw) return true;
     const { date, count } = JSON.parse(raw) as { date: string; count: number };
     const today = new Date().toISOString().slice(0, 10);
-    if (date !== today) return true; // new day — reset
+    if (date !== today) return true;
     return count < MAX_SHOWS_PER_DAY;
   } catch {
     return true;
@@ -25,14 +30,14 @@ function shouldShowPopup(): boolean {
 
 function recordShow() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(popupKey());
     const today = new Date().toISOString().slice(0, 10);
     let count = 1;
     if (raw) {
       const parsed = JSON.parse(raw) as { date: string; count: number };
       count = parsed.date === today ? parsed.count + 1 : 1;
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: today, count }));
+    localStorage.setItem(popupKey(), JSON.stringify({ date: today, count }));
   } catch {
     // ignore storage errors
   }
@@ -44,15 +49,17 @@ export default function SubscribePopup() {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { subscribePopupEnabled, copySubscribeTitle, copySubscribeBody, copySubscribePromoCode, storeName } = useSettings();
 
   useEffect(() => {
+    if (!subscribePopupEnabled) return;
     if (!shouldShowPopup()) return;
     const timer = setTimeout(() => {
       setOpen(true);
       recordShow();
     }, DELAY_MS);
     return () => clearTimeout(timer);
-  }, []);
+  }, [subscribePopupEnabled]);
 
   const handleClose = () => {
     setOpen(false);
@@ -68,7 +75,7 @@ export default function SubscribePopup() {
         phone: phone || null,
         source: "popup",
       });
-      toast({ title: "Welcome to ISHQARA!", description: "Use code FIRST10 for 10% off your first order." });
+      toast({ title: `Welcome to ${storeName}!`, description: `Use code ${copySubscribePromoCode} for your discount.` });
       handleClose();
     } catch {
       toast({ title: "Something went wrong", variant: "destructive" });
@@ -79,7 +86,8 @@ export default function SubscribePopup() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 border-0" hideCloseButton>
+      <DialogContent className="sm:max-w-md p-0 gap-0 border-0" hideCloseButton aria-describedby={undefined}>
+        <DialogTitle className="sr-only">Subscribe for a discount</DialogTitle>
         <div className="relative bg-gradient-to-br from-primary/5 via-background to-primary/10 p-6 sm:p-8 rounded-lg">
           <button
             onClick={handleClose}
@@ -95,10 +103,10 @@ export default function SubscribePopup() {
               <Gift className="w-6 h-6 text-primary" />
             </div>
             <h3 className="font-serif text-xl font-bold mb-1" data-testid="text-popup-title">
-              Get 10% Off
+              {copySubscribeTitle}
             </h3>
             <p className="text-sm text-muted-foreground">
-              Join the ISHQARA family and get an exclusive discount on your first order
+              {copySubscribeBody}
             </p>
           </div>
 

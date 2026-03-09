@@ -321,7 +321,7 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-muted-foreground">Ref</span>
-                    <span className="font-mono">ISHQARA-{upiOrderId}</span>
+                    <span className="font-mono">{bizName}-{upiOrderId}</span>
                   </div>
                 </div>
                 <p className="text-[11px] text-muted-foreground">

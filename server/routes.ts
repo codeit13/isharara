@@ -3,8 +3,12 @@ import multer from "multer";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
-import { isAuthenticated, requireAdmin, optionalAuth } from "./auth";
+import { isAuthenticated, requireAdmin, requireSuperAdmin, optionalAuth } from "./auth";
 import { authStorage, normalizePhone } from "./auth/storage";
+import { invalidateTenantCache } from "./tenant";
+import { tenants, tenantMembers, tenantPayments, products, orders, users } from "@shared/schema";
+import { db } from "./db";
+import { eq, sql, and, lte, desc } from "drizzle-orm";
 import {
   isRazorpayConfigured,
   getRazorpayKeyId,
@@ -14,10 +18,12 @@ import {
 import {
   uploadSingleImage,
   uploadImageByFilename,
+  uploadLogo,
   getImageBuffer,
   isAllowedImage,
   sanitizeProductName,
 } from "./uploads";
+import dns from "dns/promises";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
@@ -29,7 +35,7 @@ export async function registerRoutes(
   // Serve product images from Replit Object Storage (public, no auth)
   app.get("/api/uploads/{*path}", async (req, res) => {
     const objectName = (req.params as { path?: string }).path ?? "";
-    if (!objectName?.startsWith("products/")) {
+    if (!objectName?.includes("products/") && !objectName?.includes("logo")) {
       return res.status(400).json({ message: "Invalid path" });
     }
     const buffer = await getImageBuffer(objectName);
@@ -40,18 +46,51 @@ export async function registerRoutes(
     res.type(mime).send(buffer);
   });
 
-  app.get("/api/products", async (_req, res) => {
-    const products = await storage.getProducts();
+  app.get("/api/products", async (req, res) => {
+    const tid = req.tenant.id;
+    const pageParam = req.query.page as string | undefined;
+    const limitParam = req.query.limit as string | undefined;
+    const page = pageParam ? parseInt(pageParam, 10) : 0;
+    const limit = limitParam ? parseInt(limitParam, 10) : 0;
+
+    if (page >= 1 && limit >= 1) {
+      const result = await storage.getProductsPaginated(tid, {
+        page,
+        limit,
+        category: (req.query.category as string) || undefined,
+        gender: (req.query.gender as string) || undefined,
+        productType: (req.query.productType as string) || undefined,
+        tag: (req.query.tag as string) || undefined,
+        sort: (req.query.sort as string) || undefined,
+      });
+      res.json(result);
+    } else {
+      const products = await storage.getProducts(tid);
+      res.json(products);
+    }
+  });
+
+  app.get("/api/products/search", async (req, res) => {
+    const q = (req.query.q as string) ?? "";
+    const trimmed = q.trim();
+    if (!trimmed) {
+      return res.json([]);
+    }
+    try {
+      const products = await storage.searchProducts(req.tenant.id, trimmed);
+      res.json(products);
+    } catch (e: any) {
+      res.status(500).json({ message: e?.message ?? "Search failed" });
+    }
+  });
+
+  app.get("/api/admin/products", isAuthenticated, requireAdmin, async (req, res) => {
+    const products = await storage.getAllProducts(req.tenant.id);
     res.json(products);
   });
 
-  app.get("/api/admin/products", isAuthenticated, requireAdmin, async (_req, res) => {
-    const products = await storage.getAllProducts();
-    res.json(products);
-  });
-
-  app.get("/api/shop-filters", async (_req, res) => {
-    const filters = await storage.getShopFilters();
+  app.get("/api/shop-filters", async (req, res) => {
+    const filters = await storage.getShopFilters(req.tenant.id);
     res.json(filters);
   });
 
@@ -84,13 +123,14 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/promotions", async (_req, res) => {
-    const promos = await storage.getPromotions();
+  app.get("/api/promotions", async (req, res) => {
+    const promos = await storage.getPromotions(req.tenant.id);
     res.json(promos);
   });
 
   app.post("/api/checkout/validate-promo", optionalAuth, async (req, res) => {
     try {
+      const tid = req.tenant.id;
       const body = z.object({
         code: z.string().min(1),
         email: z.string().email().optional(),
@@ -99,7 +139,7 @@ export async function registerRoutes(
       const userId = user?.id ?? null;
       const email = body.email || user?.email || "";
 
-      const promos = await storage.getPromotions();
+      const promos = await storage.getPromotions(tid);
       const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === body.code.trim().toUpperCase());
       if (!promo) {
         return res.json({ valid: false, reason: "Invalid or expired code" });
@@ -117,7 +157,7 @@ export async function registerRoutes(
         if (!email) {
           return res.json({ valid: false, reason: "Enter your email to use this first-order code" });
         }
-        const hasOrdered = await storage.hasOrderedBefore(userId, email);
+        const hasOrdered = await storage.hasOrderedBefore(tid, userId, email);
         if (hasOrdered) {
           return res.json({ valid: false, reason: "This code is for first-time customers only" });
         }
@@ -131,6 +171,7 @@ export async function registerRoutes(
 
   app.post("/api/orders", optionalAuth, async (req, res) => {
     try {
+      const tid = req.tenant.id;
       const orderSchema = z.object({
         customerName: z.string().min(1),
         email: z.string().email(),
@@ -156,10 +197,10 @@ export async function registerRoutes(
       const userId = user?.id || null;
 
       if (data.discount > 0 && data.promoCode) {
-        const promos = await storage.getPromotions();
+        const promos = await storage.getPromotions(tid);
         const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === data.promoCode!.trim().toUpperCase());
         if (promo?.firstOrderOnly) {
-          const hasOrdered = await storage.hasOrderedBefore(userId, data.email);
+          const hasOrdered = await storage.hasOrderedBefore(tid, userId, data.email);
           if (hasOrdered) {
             return res.status(400).json({ message: "This code is for first-time customers only" });
           }
@@ -167,9 +208,8 @@ export async function registerRoutes(
       }
 
       const { promoCode: _pc, ...orderData } = data;
-      const order = await storage.createOrder({ ...orderData, userId });
+      const order = await storage.createOrder(tid, { ...orderData, userId });
 
-      // Auto-link phone/email to user account on first use
       if (user) {
         const normalizedPhone = normalizePhone(data.phone);
         if (!user.phone && normalizedPhone.length >= 10) {
@@ -179,7 +219,6 @@ export async function registerRoutes(
           await authStorage.linkEmail(user.id, data.email).catch(() => {});
         }
 
-        // Auto-save address if not already stored for this user
         try {
           const existingAddrs = await storage.getAddressesByUserId(user.id);
           const alreadySaved = existingAddrs.some(
@@ -208,7 +247,7 @@ export async function registerRoutes(
       }
 
       if (data.paymentMethod === "razorpay") {
-        const razorpayEnabled = (await storage.getSetting("razorpay_enabled")) !== "false";
+        const razorpayEnabled = (await storage.getSetting(tid, "razorpay_enabled")) !== "false";
         if (!razorpayEnabled || !isRazorpayConfigured()) {
           return res.status(503).json({ message: "Online payment is temporarily unavailable" });
         }
@@ -272,9 +311,10 @@ export async function registerRoutes(
 
   app.get("/api/my-orders", isAuthenticated, async (req: any, res) => {
     try {
+      const tid = req.tenant.id;
       const userId = req.user.id;
       const email = req.user.email || "";
-      const userOrders = await storage.getOrdersByUserIdOrEmail(userId, email);
+      const userOrders = await storage.getOrdersByUserIdOrEmail(tid, userId, email);
       res.json(userOrders);
     } catch (e: any) {
       res.status(500).json({ message: e.message });
@@ -292,15 +332,15 @@ export async function registerRoutes(
       if (!data.email && !data.phone) {
         return res.status(400).json({ message: "Email or phone required" });
       }
-      const sub = await storage.createSubscriber(data as any);
+      const sub = await storage.createSubscriber(req.tenant.id, data as any);
       res.json(sub);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
     }
   });
 
-  app.get("/api/admin/orders", isAuthenticated, requireAdmin, async (_req, res) => {
-    const allOrders = await storage.getOrders();
+  app.get("/api/admin/orders", isAuthenticated, requireAdmin, async (req, res) => {
+    const allOrders = await storage.getOrders(req.tenant.id);
     res.json(allOrders);
   });
 
@@ -328,7 +368,7 @@ export async function registerRoutes(
         stock: z.number().min(0),
       })).min(1);
       const validatedSizes = sizeSchema.parse(sizes);
-      const product = await storage.createProduct(productData, validatedSizes.map(s => ({ ...s, productId: 0 })));
+      const product = await storage.createProduct(req.tenant.id, productData, validatedSizes.map(s => ({ ...s, productId: 0 })));
       res.json(product);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -378,7 +418,7 @@ export async function registerRoutes(
       return res.status(400).json({ message: "Invalid file. Use JPEG, PNG or WebP, max 2MB." });
     }
     try {
-      const url = await uploadSingleImage(file.buffer, file.mimetype);
+      const url = await uploadSingleImage(file.buffer, file.mimetype, req.tenant.slug);
       res.json({ url });
     } catch (e: any) {
       const msg = e.message ?? "Upload failed";
@@ -401,7 +441,7 @@ export async function registerRoutes(
       }
     }
     try {
-      const allProducts = await storage.getAllProducts();
+      const allProducts = await storage.getAllProducts(req.tenant.id);
       const updated: { productId: number; name: string; url: string }[] = [];
       const unmatched: string[] = [];
 
@@ -413,7 +453,7 @@ export async function registerRoutes(
           unmatched.push(file.originalname);
           continue;
         }
-        const url = await uploadImageByFilename(file.buffer, file.mimetype, file.originalname);
+        const url = await uploadImageByFilename(file.buffer, file.mimetype, file.originalname, req.tenant.slug);
         await storage.updateProduct(product.id, { image: url, images: [url] }, product.sizes.map((s) => ({ ...s, originalPrice: s.originalPrice ?? null })));
         updated.push({ productId: product.id, name: product.name, url });
       }
@@ -453,6 +493,7 @@ export async function registerRoutes(
   // CSV bulk import
   app.post("/api/admin/products/import-csv", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      const tid = req.tenant.id;
       const { rows } = z.object({
         rows: z.array(z.object({
           name: z.string().min(1),
@@ -489,7 +530,7 @@ export async function registerRoutes(
 
           if (!parsedSizes.length) throw new Error("No valid sizes parsed");
 
-          await storage.createProduct({
+          await storage.createProduct(tid, {
             name: row.name.trim(),
             brand: row.brand || "ISHQARA",
             description: row.description,
@@ -532,7 +573,7 @@ export async function registerRoutes(
         endDate: z.any().nullable().optional(),
       });
       const data = promoSchema.parse(req.body);
-      const promo = await storage.createPromotion(data as any);
+      const promo = await storage.createPromotion(req.tenant.id, data as any);
       res.json(promo);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -561,8 +602,8 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/admin/subscribers", isAuthenticated, requireAdmin, async (_req, res) => {
-    const subs = await storage.getSubscribers();
+  app.get("/api/admin/subscribers", isAuthenticated, requireAdmin, async (req, res) => {
+    const subs = await storage.getSubscribers(req.tenant.id);
     res.json(subs);
   });
 
@@ -618,11 +659,12 @@ export async function registerRoutes(
   });
 
   // ── SEO ─────────────────────────────────────────────────────────────────────
-  // Dynamic sitemap — includes all product pages
-  app.get("/sitemap.xml", async (_req, res) => {
+  app.get("/sitemap.xml", async (req, res) => {
     try {
-      const products = await storage.getProducts();
-      const BASE = "https://ishqara.com";
+      const tid = req.tenant?.id ?? 1;
+      const allProducts = await storage.getProducts(tid);
+      const domain = req.tenant?.domain || "ishqara.com";
+      const BASE = `https://${domain}`;
       const staticRoutes = [
         { loc: "/",               changefreq: "weekly",  priority: "1.0" },
         { loc: "/shop",           changefreq: "daily",   priority: "0.9" },
@@ -645,7 +687,7 @@ export async function registerRoutes(
     <changefreq>${changefreq}</changefreq>
     <priority>${priority}</priority>
   </url>`),
-        ...products.map((p) => `
+        ...allProducts.map((p) => `
   <url>
     <loc>${BASE}/product/${p.id}</loc>
     <lastmod>${now}</lastmod>
@@ -667,11 +709,9 @@ export async function registerRoutes(
   });
 
   // ── Settings ────────────────────────────────────────────────────────────────
-  // Public read: frontend needs shipping fee, store name, UPI config, etc.
-  app.get("/api/settings", async (_req, res) => {
+  app.get("/api/settings", async (req, res) => {
     try {
-      const rows = await storage.getSettings();
-      // Return as { key: value } map for easy consumption
+      const rows = await storage.getSettings(req.tenant.id);
       const map: Record<string, string> = {};
       for (const r of rows) map[r.key] = r.value;
       res.json(map);
@@ -680,29 +720,608 @@ export async function registerRoutes(
     }
   });
 
-  // Full settings list with metadata — admin only
-  app.get("/api/admin/settings", isAuthenticated, requireAdmin, async (_req, res) => {
+  app.get("/api/admin/settings", isAuthenticated, requireAdmin, async (req, res) => {
     try {
-      const rows = await storage.getSettings();
+      const rows = await storage.getSettings(req.tenant.id);
       res.json(rows);
     } catch (e: any) {
       res.status(500).json({ message: e.message });
     }
   });
 
-  // Bulk update settings — admin only
   app.patch("/api/admin/settings", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      const tid = req.tenant.id;
       const body = z.record(z.string(), z.string()).parse(req.body);
       await storage.upsertSettings(
+        tid,
         Object.entries(body).map(([key, value]) => ({ key, value }))
       );
-      const rows = await storage.getSettings();
+      const rows = await storage.getSettings(tid);
       const map: Record<string, string> = {};
       for (const r of rows) map[r.key] = r.value;
       res.json(map);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
+    }
+  });
+
+  // ── Tenant info (public) ───────────────────────────────────────────────────
+  app.get("/api/tenant", async (req, res) => {
+    const t = req.tenant;
+    res.json({
+      id: t.id,
+      name: t.name,
+      slug: t.slug,
+      logo: t.logo,
+      brandColor: t.brandColor,
+      supportEmail: t.supportEmail,
+      supportPhone: t.supportPhone,
+      domain: t.domain,
+      domainVerified: t.domainVerified,
+    });
+  });
+
+  // ── Super Admin routes ────────────────────────────────────────────────────
+
+  app.get("/api/super-admin/stats", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const [tenantCount] = await db.select({ count: sql<number>`count(*)::int` }).from(tenants);
+      const [userCount] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
+      const [orderCount] = await db.select({ count: sql<number>`count(*)::int` }).from(orders);
+      const [productCount] = await db.select({ count: sql<number>`count(*)::int` }).from(products);
+
+      // Platform billing revenue (paid payments from tenants)
+      const [collected] = await db
+        .select({ total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int` })
+        .from(tenantPayments)
+        .where(eq(tenantPayments.status, "paid"));
+      const [pending] = await db
+        .select({ total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int` })
+        .from(tenantPayments)
+        .where(eq(tenantPayments.status, "pending"));
+      const [overdue] = await db
+        .select({
+          total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int`,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(tenantPayments)
+        .where(eq(tenantPayments.status, "overdue"));
+
+      // Mrr: sum retainerAmount of active tenants with monthly billing
+      const [mrr] = await db
+        .select({ total: sql<number>`coalesce(sum(${tenants.retainerAmount}), 0)::int` })
+        .from(tenants)
+        .where(and(eq(tenants.isActive, true), eq(tenants.billingCycle, "monthly")));
+      // Arr: monthly * 12 + yearly retainers
+      const [yearlyRetainers] = await db
+        .select({ total: sql<number>`coalesce(sum(${tenants.retainerAmount}), 0)::int` })
+        .from(tenants)
+        .where(and(eq(tenants.isActive, true), eq(tenants.billingCycle, "yearly")));
+
+      res.json({
+        tenants: tenantCount.count,
+        users: userCount.count,
+        orders: orderCount.count,
+        products: productCount.count,
+        revenue: collected.total,
+        pendingRevenue: pending.total,
+        overdueRevenue: overdue.total,
+        overdueCount: overdue.count,
+        mrr: mrr.total,
+        arr: mrr.total * 12 + yearlyRetainers.total,
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/super-admin/users/search", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const q = String(req.query.q || "").trim().toLowerCase();
+      if (q.length < 2) return res.json([]);
+      const results = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          phone: users.phone,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          profileImageUrl: users.profileImageUrl,
+          isSuperAdmin: users.isSuperAdmin,
+        })
+        .from(users)
+        .where(
+          sql`lower(${users.email}) like ${"%" + q + "%"} OR lower(${users.firstName}) like ${"%" + q + "%"} OR lower(${users.lastName}) like ${"%" + q + "%"} OR ${users.phone} like ${"%" + q + "%"}`
+        )
+        .limit(10);
+      res.json(results);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/super-admin/tenants", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const all = await db.select().from(tenants);
+      // Attach member count and order/product counts per tenant
+      const enriched = await Promise.all(all.map(async (t) => {
+        const [mc] = await db.select({ count: sql<number>`count(*)::int` }).from(tenantMembers).where(eq(tenantMembers.tenantId, t.id));
+        const [oc] = await db.select({ count: sql<number>`count(*)::int` }).from(orders).where(eq(orders.tenantId, t.id));
+        const [pc] = await db.select({ count: sql<number>`count(*)::int` }).from(products).where(eq(products.tenantId, t.id));
+        const [rv] = await db.select({ total: sql<number>`coalesce(sum(${orders.total}), 0)::int` }).from(orders).where(eq(orders.tenantId, t.id));
+        const [billingCollected] = await db.select({ total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int` }).from(tenantPayments).where(and(eq(tenantPayments.tenantId, t.id), eq(tenantPayments.status, "paid")));
+        const [billingPending] = await db.select({ total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int` }).from(tenantPayments).where(and(eq(tenantPayments.tenantId, t.id), eq(tenantPayments.status, "pending")));
+        const [billingOverdue] = await db.select({ total: sql<number>`coalesce(sum(${tenantPayments.amount}), 0)::int` }).from(tenantPayments).where(and(eq(tenantPayments.tenantId, t.id), eq(tenantPayments.status, "overdue")));
+        return {
+          ...t,
+          memberCount: mc.count, orderCount: oc.count, productCount: pc.count,
+          orderRevenue: rv.total,
+          billingCollected: billingCollected.total,
+          billingPending: billingPending.total,
+          billingOverdue: billingOverdue.total,
+        };
+      }));
+      res.json(enriched);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/super-admin/tenants", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().min(1),
+        slug: z.string().min(1).regex(/^[a-z0-9-]+$/),
+        domain: z.string().optional().nullable(),
+        logo: z.string().optional().nullable(),
+        brandColor: z.string().optional().nullable(),
+        supportEmail: z.string().email().optional().nullable(),
+        supportPhone: z.string().optional().nullable(),
+      }).parse(req.body);
+
+      const [created] = await db.insert(tenants).values({
+        name: body.name,
+        slug: body.slug,
+        domain: body.domain ?? null,
+        logo: body.logo ?? null,
+        brandColor: body.brandColor ?? null,
+        supportEmail: body.supportEmail ?? null,
+        supportPhone: body.supportPhone ?? null,
+      }).returning();
+
+      // Seed default settings for the new tenant
+      await storage.seedDefaultSettings(created.id);
+
+      // If an initial admin user ID was provided, add them as owner
+      const adminUserId = req.body.adminUserId as string | undefined;
+      if (adminUserId) {
+        await authStorage.addTenantMember(created.id, adminUserId, "owner");
+      }
+
+      invalidateTenantCache();
+      res.json(created);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/super-admin/tenants/:id", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = z.object({
+        name: z.string().min(1).optional(),
+        slug: z.string().min(1).regex(/^[a-z0-9-]+$/).optional(),
+        domain: z.string().optional().nullable(),
+        logo: z.string().optional().nullable(),
+        brandColor: z.string().optional().nullable(),
+        supportEmail: z.string().email().optional().nullable(),
+        supportPhone: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      }).parse(req.body);
+
+      const [updated] = await db.update(tenants).set(body).where(eq(tenants.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "Tenant not found" });
+
+      invalidateTenantCache();
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.get("/api/super-admin/tenants/:id/members", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const members = await authStorage.getTenantMembers(tenantId);
+      res.json(members);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/super-admin/tenants/:id/members", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const body = z.object({
+        userId: z.string().min(1),
+        role: z.enum(["owner", "admin", "staff"]),
+      }).parse(req.body);
+
+      const member = await authStorage.addTenantMember(tenantId, body.userId, body.role);
+      res.json(member);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.delete("/api/super-admin/tenants/:id/members/:userId", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const userId = String(req.params.userId);
+      await authStorage.removeTenantMember(tenantId, userId);
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // ── Tenant settings (Super Admin) ────────────────────────────────────────
+  app.get("/api/super-admin/tenants/:id/settings", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const rows = await storage.getSettings(tenantId);
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value;
+      res.json(map);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/super-admin/tenants/:id/settings", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const body = z.record(z.string(), z.string()).parse(req.body);
+      await storage.upsertSettings(
+        tenantId,
+        Object.entries(body).map(([key, value]) => ({ key, value }))
+      );
+      const rows = await storage.getSettings(tenantId);
+      const map: Record<string, string> = {};
+      for (const r of rows) map[r.key] = r.value;
+      res.json(map);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/super-admin/tenants/:id/members/:userId/role", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const userId = String(req.params.userId);
+      const body = z.object({ role: z.enum(["owner", "admin", "staff"]) }).parse(req.body);
+      const member = await authStorage.addTenantMember(tenantId, userId, body.role);
+      res.json(member);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // ── Tenant logo upload ────────────────────────────────────────────────────
+  app.post("/api/super-admin/tenants/:id/logo", isAuthenticated, requireSuperAdmin, upload.single("logo"), async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+
+      const file = (req as any).file;
+      if (!file) return res.status(400).json({ message: "No image file provided" });
+      if (!isAllowedImage(file.mimetype, file.size)) {
+        return res.status(400).json({ message: "Invalid file. Use JPEG, PNG or WebP, max 2MB." });
+      }
+
+      const url = await uploadLogo(file.buffer, file.mimetype, tenant.slug);
+      await db.update(tenants).set({ logo: url }).where(eq(tenants.id, tenantId));
+      invalidateTenantCache();
+      res.json({ url });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message ?? "Logo upload failed" });
+    }
+  });
+
+  app.delete("/api/super-admin/tenants/:id/logo", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      await db.update(tenants).set({ logo: null }).where(eq(tenants.id, tenantId));
+      invalidateTenantCache();
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── Domain DNS verification ───────────────────────────────────────────────
+  app.post("/api/super-admin/tenants/:id/verify-domain", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) return res.status(404).json({ message: "Tenant not found" });
+      if (!tenant.domain) return res.status(400).json({ message: "No domain configured" });
+
+      const domain = tenant.domain;
+      const serverHost = req.get("host")?.split(":")[0] ?? "localhost";
+      const checks: { type: string; status: "pass" | "fail" | "warn"; detail: string }[] = [];
+
+      // 1. CNAME check
+      try {
+        const cnames = await dns.resolveCname(domain);
+        const cnameMatch = cnames.some(
+          (rec) => rec.replace(/\.$/, "").toLowerCase() === serverHost.toLowerCase()
+        );
+        checks.push({
+          type: "CNAME",
+          status: cnameMatch ? "pass" : "warn",
+          detail: cnameMatch
+            ? `CNAME ${domain} → ${cnames[0]} ✓`
+            : `CNAME resolves to ${cnames.join(", ")} (expected ${serverHost})`,
+        });
+      } catch {
+        checks.push({ type: "CNAME", status: "fail", detail: `No CNAME record found for ${domain}` });
+      }
+
+      // 2. A record check (fallback if no CNAME)
+      try {
+        const aRecords = await dns.resolve4(domain);
+        let serverIp: string[] = [];
+        try { serverIp = await dns.resolve4(serverHost); } catch {}
+        const aMatch = serverIp.length > 0 && aRecords.some((ip) => serverIp.includes(ip));
+        checks.push({
+          type: "A",
+          status: aMatch ? "pass" : aRecords.length > 0 ? "warn" : "fail",
+          detail: aRecords.length > 0
+            ? `A record(s): ${aRecords.join(", ")}${aMatch ? " ✓" : ` (server IP: ${serverIp.join(", ") || "unknown"})`}`
+            : `No A record found for ${domain}`,
+        });
+      } catch {
+        checks.push({ type: "A", status: "fail", detail: `No A record found for ${domain}` });
+      }
+
+      // 3. HTTP reachability — does the domain actually reach us?
+      let httpOk = false;
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        const probe = await fetch(`https://${domain}/api/tenant`, {
+          signal: controller.signal,
+          redirect: "follow",
+        });
+        clearTimeout(timeout);
+        if (probe.ok) {
+          const body = await probe.json() as any;
+          httpOk = body?.id === tenantId;
+          checks.push({
+            type: "HTTPS",
+            status: httpOk ? "pass" : "warn",
+            detail: httpOk
+              ? `https://${domain} is reachable and resolves to this tenant ✓`
+              : `https://${domain} responded but tenant ID mismatch (got ${body?.id})`,
+          });
+        } else {
+          checks.push({ type: "HTTPS", status: "warn", detail: `https://${domain} returned HTTP ${probe.status}` });
+        }
+      } catch (e: any) {
+        // Try HTTP fallback
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 5000);
+          const probe = await fetch(`http://${domain}/api/tenant`, {
+            signal: controller.signal,
+            redirect: "follow",
+          });
+          clearTimeout(timeout);
+          if (probe.ok) {
+            const body = await probe.json() as any;
+            httpOk = body?.id === tenantId;
+            checks.push({
+              type: "HTTP",
+              status: httpOk ? "warn" : "warn",
+              detail: httpOk
+                ? `http://${domain} is reachable (SSL not yet configured)`
+                : `http://${domain} responded but tenant ID mismatch`,
+            });
+          }
+        } catch {
+          checks.push({
+            type: "HTTPS",
+            status: "fail",
+            detail: `Cannot reach ${domain} — DNS not propagated or server not accessible`,
+          });
+        }
+      }
+
+      const allPass = checks.some((c) => c.status === "pass" && (c.type === "CNAME" || c.type === "A"))
+        && checks.some((c) => c.status === "pass" && (c.type === "HTTPS" || c.type === "HTTP"));
+      const dnsReady = checks.some((c) => c.status === "pass" && (c.type === "CNAME" || c.type === "A"));
+
+      if (allPass) {
+        await db.update(tenants).set({ domainVerified: true, domainVerifiedAt: new Date() }).where(eq(tenants.id, tenantId));
+        invalidateTenantCache();
+      } else if (!dnsReady && tenant.domainVerified) {
+        await db.update(tenants).set({ domainVerified: false, domainVerifiedAt: null }).where(eq(tenants.id, tenantId));
+        invalidateTenantCache();
+      }
+
+      res.json({
+        verified: allPass,
+        dnsReady,
+        checks,
+        serverHost,
+        instructions: {
+          cname: { type: "CNAME", host: domain, value: serverHost, ttl: 3600 },
+          ...(allPass ? {} : {
+            note: dnsReady
+              ? "DNS is pointing correctly but the domain is not yet reachable via HTTPS. Ensure your reverse proxy / CDN is configured."
+              : `Add a CNAME record for "${domain}" pointing to "${serverHost}". DNS propagation can take up to 48 hours.`,
+          }),
+        },
+      });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  // ── Tenant billing config ──────────────────────────────────────────────────
+  app.patch("/api/super-admin/tenants/:id/billing", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = z.object({
+        setupFee: z.number().int().min(0).optional().nullable(),
+        retainerAmount: z.number().int().min(0).optional().nullable(),
+        billingCycle: z.enum(["monthly", "yearly", "one-time"]).optional().nullable(),
+        billingStartDate: z.string().optional().nullable(),
+        nextDueDate: z.string().optional().nullable(),
+        currency: z.string().optional(),
+      }).parse(req.body);
+
+      const update: Record<string, unknown> = {};
+      if (body.setupFee !== undefined) update.setupFee = body.setupFee;
+      if (body.retainerAmount !== undefined) update.retainerAmount = body.retainerAmount;
+      if (body.billingCycle !== undefined) update.billingCycle = body.billingCycle;
+      if (body.billingStartDate !== undefined) update.billingStartDate = body.billingStartDate ? new Date(body.billingStartDate) : null;
+      if (body.nextDueDate !== undefined) update.nextDueDate = body.nextDueDate ? new Date(body.nextDueDate) : null;
+      if (body.currency) update.currency = body.currency;
+
+      const [updated] = await db.update(tenants).set(update).where(eq(tenants.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "Tenant not found" });
+      invalidateTenantCache();
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // ── Tenant payments CRUD ──────────────────────────────────────────────────
+  app.get("/api/super-admin/tenants/:id/payments", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const payments = await db
+        .select()
+        .from(tenantPayments)
+        .where(eq(tenantPayments.tenantId, tenantId))
+        .orderBy(desc(tenantPayments.createdAt));
+      res.json(payments);
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
+    }
+  });
+
+  app.post("/api/super-admin/tenants/:id/payments", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const body = z.object({
+        type: z.enum(["setup", "retainer", "addon", "refund", "custom"]),
+        amount: z.number().int(),
+        status: z.enum(["paid", "pending", "overdue", "waived"]).default("pending"),
+        dueDate: z.string().optional().nullable(),
+        paidAt: z.string().optional().nullable(),
+        note: z.string().optional().nullable(),
+        currency: z.string().default("INR"),
+      }).parse(req.body);
+
+      const [payment] = await db.insert(tenantPayments).values({
+        tenantId,
+        type: body.type,
+        amount: body.amount,
+        currency: body.currency,
+        status: body.status,
+        dueDate: body.dueDate ? new Date(body.dueDate) : null,
+        paidAt: body.paidAt ? new Date(body.paidAt) : body.status === "paid" ? new Date() : null,
+        note: body.note ?? null,
+      }).returning();
+
+      // Auto-advance nextDueDate if retainer paid
+      if (body.type === "retainer" && body.status === "paid") {
+        const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
+        if (tenant?.billingCycle && tenant.nextDueDate) {
+          const next = new Date(tenant.nextDueDate);
+          if (tenant.billingCycle === "monthly") next.setMonth(next.getMonth() + 1);
+          else if (tenant.billingCycle === "yearly") next.setFullYear(next.getFullYear() + 1);
+          await db.update(tenants).set({ nextDueDate: next }).where(eq(tenants.id, tenantId));
+        }
+      }
+
+      res.json(payment);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.patch("/api/super-admin/payments/:id", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const body = z.object({
+        status: z.enum(["paid", "pending", "overdue", "waived"]).optional(),
+        paidAt: z.string().optional().nullable(),
+        note: z.string().optional().nullable(),
+        amount: z.number().int().optional(),
+      }).parse(req.body);
+
+      const update: Record<string, unknown> = {};
+      if (body.status) {
+        update.status = body.status;
+        if (body.status === "paid" && !body.paidAt) update.paidAt = new Date();
+      }
+      if (body.paidAt !== undefined) update.paidAt = body.paidAt ? new Date(body.paidAt) : null;
+      if (body.note !== undefined) update.note = body.note;
+      if (body.amount !== undefined) update.amount = body.amount;
+
+      const [updated] = await db.update(tenantPayments).set(update).where(eq(tenantPayments.id, id)).returning();
+      if (!updated) return res.status(404).json({ message: "Payment not found" });
+
+      // Auto-advance nextDueDate if retainer just marked paid
+      if (body.status === "paid" && updated.type === "retainer") {
+        const [tenant] = await db.select().from(tenants).where(eq(tenants.id, updated.tenantId));
+        if (tenant?.billingCycle && tenant.nextDueDate) {
+          const next = new Date(tenant.nextDueDate);
+          if (tenant.billingCycle === "monthly") next.setMonth(next.getMonth() + 1);
+          else if (tenant.billingCycle === "yearly") next.setFullYear(next.getFullYear() + 1);
+          await db.update(tenants).set({ nextDueDate: next }).where(eq(tenants.id, updated.tenantId));
+        }
+      }
+
+      res.json(updated);
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  app.delete("/api/super-admin/payments/:id", isAuthenticated, requireSuperAdmin, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const [deleted] = await db.delete(tenantPayments).where(eq(tenantPayments.id, id)).returning();
+      if (!deleted) return res.status(404).json({ message: "Payment not found" });
+      res.json({ success: true });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // ── Mark overdue payments (can be called by cron or manually) ─────────────
+  app.post("/api/super-admin/billing/mark-overdue", isAuthenticated, requireSuperAdmin, async (_req, res) => {
+    try {
+      const now = new Date();
+      const result = await db
+        .update(tenantPayments)
+        .set({ status: "overdue" })
+        .where(and(
+          eq(tenantPayments.status, "pending"),
+          lte(tenantPayments.dueDate, now),
+        ))
+        .returning();
+      res.json({ marked: result.length });
+    } catch (e: any) {
+      res.status(500).json({ message: e.message });
     }
   });
 

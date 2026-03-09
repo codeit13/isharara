@@ -6,49 +6,51 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/ProductCard";
 import SEOHead from "@/components/SEOHead";
+import { useSettings } from "@/hooks/use-settings";
 import type { ProductWithSizes, Promotion } from "@shared/schema";
 
 function HeroSection() {
+  const { copyHeroBadge, copyHeroTitle, copyHeroTagline, copyHeroDescription, copyHeroCta, storeName, dealsEnabled } = useSettings();
   return (
     <section className="relative w-full" data-testid="section-hero">
       <div className="relative h-[70vh] min-h-[480px] max-h-[640px]">
-        {/* Hero banner: recommended 1920×800 px (or 1440×640) for best quality */}
         <img
           src="/images/hero-banner.png"
-          alt="The Ishqara Collection"
+          alt={storeName}
           className="w-full h-full object-cover"
           width={1920}
           height={800}
         />
-        {/* Dark overlay: stronger at bottom and on the left so white text stays readable on light backgrounds */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/25 to-transparent" />
         <div className="absolute inset-0 flex items-end pb-12 md:pb-16">
           <div className="max-w-7xl mx-auto px-4 w-full">
             <div className="max-w-2xl [text-shadow:0_1px_3px_rgba(0,0,0,0.8)]">
               <Badge variant="outline" className="mb-4 bg-black/40 backdrop-blur border-white/30 text-white text-xs">
-                New Collection 2026
+                {copyHeroBadge}
               </Badge>
               <h1 className="font-serif text-3xl md:text-5xl font-bold text-white mb-3 leading-tight md:whitespace-nowrap" data-testid="text-hero-title">
-                Love, bottled. Meet Ishqara.
+                {copyHeroTitle}
               </h1>
               <p className="text-white text-base md:text-lg font-serif italic mb-2">
-                Not just a perfume. A presence.
+                {copyHeroTagline}
               </p>
               <p className="text-white text-sm md:text-base mb-6 leading-relaxed max-w-md">
-                Discover premium fragrances that make every day special. Starting at just Rs. 499.
+                {copyHeroDescription}
               </p>
               <div className="flex flex-wrap gap-3">
                 <Link href="/shop">
                   <Button variant="default" data-testid="button-shop-now">
-                    Shop Now <ArrowRight className="w-4 h-4 ml-1" />
+                    {copyHeroCta} <ArrowRight className="w-4 h-4 ml-1" />
                   </Button>
                 </Link>
-                <Link href="/deals">
-                  <Button variant="outline" className="bg-white/10 backdrop-blur border-white/30 text-white" data-testid="button-inaugural-offer">
-                    Inaugural Offer
-                  </Button>
-                </Link>
+                {dealsEnabled && (
+                  <Link href="/deals">
+                    <Button variant="outline" className="bg-white/10 backdrop-blur border-white/30 text-white" data-testid="button-inaugural-offer">
+                      {copyHeroBadge}
+                    </Button>
+                  </Link>
+                )}
               </div>
             </div>
           </div>

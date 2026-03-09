@@ -1,11 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import type { CartItem } from "@shared/schema";
+import { getTenantSlug } from "../hooks/use-tenant";
 
-const CART_KEY = "ishqara_cart";
+function cartKey(): string {
+  return `cart_${getTenantSlug()}`;
+}
 
 function getCart(): CartItem[] {
   try {
-    const data = localStorage.getItem(CART_KEY);
+    const data = localStorage.getItem(cartKey());
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
@@ -13,7 +16,7 @@ function getCart(): CartItem[] {
 }
 
 function saveCart(items: CartItem[]) {
-  localStorage.setItem(CART_KEY, JSON.stringify(items));
+  localStorage.setItem(cartKey(), JSON.stringify(items));
   window.dispatchEvent(new Event("cart-updated"));
 }
 

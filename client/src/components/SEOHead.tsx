@@ -1,14 +1,14 @@
 import { Helmet } from "react-helmet-async";
+import { useTenant } from "@/hooks/use-tenant";
 
-const BASE_URL = "https://ishqara.com";
-const DEFAULT_IMAGE = `${BASE_URL}/og-image.png`;
-const SITE_NAME = "ISHQARA";
+const FALLBACK_URL = "https://ishqara.com";
+const FALLBACK_NAME = "ISHQARA";
 
 interface SEOHeadProps {
-  title: string;             // page-specific title — "ISHQARA" suffix added automatically
+  title: string;
   description: string;
-  canonicalPath?: string;    // e.g. "/shop" — BASE_URL is prepended
-  image?: string;            // full URL or path; defaults to og-image
+  canonicalPath?: string;
+  image?: string;
   type?: "website" | "product" | "article";
   noIndex?: boolean;
   jsonLd?: object | object[];
@@ -23,13 +23,18 @@ export default function SEOHead({
   noIndex = false,
   jsonLd,
 }: SEOHeadProps) {
-  const fullTitle = `${title} | ${SITE_NAME}`;
-  const canonicalUrl = canonicalPath ? `${BASE_URL}${canonicalPath}` : undefined;
+  const tenant = useTenant();
+  const siteName = tenant?.name || FALLBACK_NAME;
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : FALLBACK_URL;
+  const defaultImage = `${baseUrl}/og-image.png`;
+
+  const fullTitle = `${title} | ${siteName}`;
+  const canonicalUrl = canonicalPath ? `${baseUrl}${canonicalPath}` : undefined;
   const ogImage = image
     ? image.startsWith("http")
       ? image
-      : `${BASE_URL}${image}`
-    : DEFAULT_IMAGE;
+      : `${baseUrl}${image}`
+    : defaultImage;
 
   const ldArray = jsonLd
     ? Array.isArray(jsonLd)
@@ -45,7 +50,7 @@ export default function SEOHead({
       {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
 
       {/* Open Graph */}
-      <meta property="og:site_name" content={SITE_NAME} />
+      <meta property="og:site_name" content={siteName} />
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={ogImage} />

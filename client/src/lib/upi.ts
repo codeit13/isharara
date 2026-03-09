@@ -35,7 +35,7 @@ export function buildUpiUrl(params: UpiParams): string {
     `pn=${encodeURIComponent(name)}`,
     `am=${params.amount.toFixed(2)}`,
     `cu=INR`,
-    `tr=${encodeURIComponent(`ISHQARA-${params.orderId}`)}`,
+    `tr=${encodeURIComponent(`${name}-${params.orderId}`)}`,
     `tn=${encodeURIComponent(note)}`,
     `mode=${isMerchant ? "02" : "01"}`,
   ];
@@ -66,7 +66,7 @@ export function buildAppUpiUrls(params: UpiParams): {
   if (!upiId) return [];
 
   const note = params.note ?? getUpiNote(params.orderId);
-  const tr = `ISHQARA-${params.orderId}`;
+  const tr = `${name}-${params.orderId}`;
   const am = params.amount.toFixed(2);
   const mc = (params.merchantCode || "5411").replace(/\D/g, "").slice(0, 4) || "5411";
 

@@ -1,4 +1,4 @@
-import { users, otpVerifications, type User, type UpsertUser } from "@shared/models/auth";
+import { users, otpVerifications, tenantMembers, type User, type UpsertUser, type TenantMember } from "@shared/models/auth";
 import { db } from "../db";
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcrypt";
@@ -35,6 +35,13 @@ export interface IAuthStorage {
   verifyPassword(password: string, hash: string): Promise<boolean>;
   linkPhone(userId: string, phone: string): Promise<void>;
   linkEmail(userId: string, email: string): Promise<void>;
+
+  // Tenant membership
+  getTenantMembership(userId: string, tenantId: number): Promise<TenantMember | undefined>;
+  getTenantMembers(tenantId: number): Promise<(TenantMember & { user: Omit<User, "passwordHash"> })[]>;
+  addTenantMember(tenantId: number, userId: string, role: string): Promise<TenantMember>;
+  removeTenantMember(tenantId: number, userId: string): Promise<void>;
+  updateTenantMemberRole(tenantId: number, userId: string, role: string): Promise<TenantMember | undefined>;
 }
 
 class AuthStorage implements IAuthStorage {
@@ -154,8 +161,67 @@ class AuthStorage implements IAuthStorage {
 
   async linkEmail(userId: string, email: string): Promise<void> {
     const existing = await this.getUserByEmail(email.toLowerCase());
-    if (existing) return; // email already belongs to another account, skip silently
+    if (existing) return;
     await db.update(users).set({ email: email.toLowerCase(), updatedAt: new Date() }).where(eq(users.id, userId));
+  }
+
+  // ── Tenant membership ────────────────────────────────────────────────────
+
+  async getTenantMembership(userId: string, tenantId: number): Promise<TenantMember | undefined> {
+    const [row] = await db
+      .select()
+      .from(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)));
+    return row;
+  }
+
+  async getTenantMembers(tenantId: number): Promise<(TenantMember & { user: Omit<User, "passwordHash"> })[]> {
+    const members = await db
+      .select()
+      .from(tenantMembers)
+      .where(eq(tenantMembers.tenantId, tenantId));
+
+    const result: (TenantMember & { user: Omit<User, "passwordHash"> })[] = [];
+    for (const m of members) {
+      const [user] = await db.select().from(users).where(eq(users.id, m.userId));
+      if (user) {
+        const { passwordHash: _, ...publicUser } = user;
+        result.push({ ...m, user: publicUser });
+      }
+    }
+    return result;
+  }
+
+  async addTenantMember(tenantId: number, userId: string, role: string): Promise<TenantMember> {
+    const existing = await this.getTenantMembership(userId, tenantId);
+    if (existing) {
+      const [updated] = await db
+        .update(tenantMembers)
+        .set({ role })
+        .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(tenantMembers)
+      .values({ tenantId, userId, role })
+      .returning();
+    return created;
+  }
+
+  async removeTenantMember(tenantId: number, userId: string): Promise<void> {
+    await db
+      .delete(tenantMembers)
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)));
+  }
+
+  async updateTenantMemberRole(tenantId: number, userId: string, role: string): Promise<TenantMember | undefined> {
+    const [updated] = await db
+      .update(tenantMembers)
+      .set({ role })
+      .where(and(eq(tenantMembers.tenantId, tenantId), eq(tenantMembers.userId, userId)))
+      .returning();
+    return updated;
   }
 }
 

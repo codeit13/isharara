@@ -4,9 +4,11 @@ import SEOHead from "@/components/SEOHead";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/ProductCard";
+import { useSettings } from "@/hooks/use-settings";
 import type { ProductWithSizes, Promotion } from "@shared/schema";
 
 export default function DealsPage() {
+  const { copyDealsTitle, copyDealsSubtitle, storeName } = useSettings();
   const { data: promotions, isLoading: promoLoading } = useQuery<Promotion[]>({
     queryKey: ["/api/promotions"],
   });
@@ -24,16 +26,16 @@ export default function DealsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8" data-testid="page-deals">
       <SEOHead
-        title="Deals & Offers — Exclusive Fragrance Discounts"
-        description="Shop ISHQARA's best deals and limited-time offers on premium fragrances. Save on luxury perfumes and gift sets."
+        title={`${copyDealsTitle} — ${storeName}`}
+        description={`Shop ${storeName}'s best deals and limited-time offers. ${copyDealsSubtitle}`}
         canonicalPath="/deals"
       />
       <div className="mb-8">
         <h1 className="font-serif text-2xl md:text-3xl font-bold mb-2" data-testid="text-deals-title">
-          Deals & Offers
+          {copyDealsTitle}
         </h1>
         <p className="text-sm text-muted-foreground">
-          Grab these exclusive deals before they're gone
+          {copyDealsSubtitle}
         </p>
       </div>
 
