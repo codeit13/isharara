@@ -42,11 +42,52 @@ export interface PaginatedProducts {
   totalPages: number;
 }
 
+export interface AdminDashboardSummary {
+  totalRevenue: number;
+  totalOrders: number;
+  pendingOrders: number;
+  inProgressOrders: number;
+  deliveredOrders: number;
+  totalProducts: number;
+  activeProducts: number;
+  lowStockSizes: number;
+}
+
+export interface AdminProductListFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface AdminOrderListFilters {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: string;
+}
+
+export interface AdminPaginatedProducts {
+  products: ProductWithSizes[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface AdminPaginatedOrders {
+  orders: Order[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
 export interface IStorage {
   // All tenant-scoped methods take tenantId as first param
   getProducts(tenantId: number): Promise<ProductWithSizes[]>;
   getProductsPaginated(tenantId: number, filters: ProductListFilters): Promise<PaginatedProducts>;
   getAllProducts(tenantId: number): Promise<ProductWithSizes[]>;
+  getAdminProductsPaginated(tenantId: number, filters: AdminProductListFilters): Promise<AdminPaginatedProducts>;
   getProduct(id: number): Promise<ProductWithSizes | undefined>;
   searchProducts(tenantId: number, query: string): Promise<ProductWithSizes[]>;
   getShopFilters(tenantId: number): Promise<ShopFilters>;
@@ -60,6 +101,7 @@ export interface IStorage {
 
   getOrder(id: number): Promise<Order | undefined>;
   getOrders(tenantId: number): Promise<Order[]>;
+  getAdminOrdersPaginated(tenantId: number, filters: AdminOrderListFilters): Promise<AdminPaginatedOrders>;
   getOrdersByUserId(tenantId: number, userId: string): Promise<Order[]>;
   getOrdersByUserIdOrEmail(tenantId: number, userId: string, email: string): Promise<Order[]>;
   hasOrderedBefore(tenantId: number, userId: string | null, email: string): Promise<boolean>;
@@ -88,6 +130,7 @@ export interface IStorage {
   upsertSetting(tenantId: number, key: string, value: string): Promise<Setting>;
   upsertSettings(tenantId: number, entries: { key: string; value: string }[]): Promise<void>;
   seedDefaultSettings(tenantId?: number): Promise<void>;
+  getAdminDashboardSummary(tenantId: number): Promise<AdminDashboardSummary>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -187,6 +230,53 @@ export class DatabaseStorage implements IStorage {
       ...p,
       sizes: allSizes.filter((s) => s.productId === p.id),
     }));
+  }
+
+  async getAdminProductsPaginated(tenantId: number, filters: AdminProductListFilters): Promise<AdminPaginatedProducts> {
+    const pageNum = Math.max(1, Math.floor(filters.page ?? 1));
+    const limitNum = Math.min(100, Math.max(1, Math.floor(filters.limit ?? 20)));
+    const offset = (pageNum - 1) * limitNum;
+    const conditions: any[] = [eq(products.tenantId, tenantId)];
+
+    if (filters.search) {
+      const pattern = `%${escapeLikePattern(filters.search)}%`;
+      conditions.push(
+        or(
+          sql`${products.name} ILIKE ${pattern}`,
+          sql`${products.category} ILIKE ${pattern}`,
+          sql`${products.gender} ILIKE ${pattern}`,
+          sql`${products.productType} ILIKE ${pattern}`
+        ) as any
+      );
+    }
+
+    const whereClause = and(...conditions);
+    const [countRow] = await db.select({ count: count() }).from(products).where(whereClause);
+    const totalCount = Number(countRow?.count ?? 0);
+
+    const pageProducts = await db
+      .select()
+      .from(products)
+      .where(whereClause)
+      .orderBy(desc(products.id))
+      .limit(limitNum)
+      .offset(offset);
+
+    const productIds = pageProducts.map((product) => product.id);
+    const sizes = productIds.length > 0
+      ? await db.select().from(productSizes).where(sql`${productSizes.productId} = ANY(ARRAY[${sql.join(productIds.map((id) => sql`${id}`), sql`, `)}]::int[])`)
+      : [];
+
+    return {
+      products: pageProducts.map((product) => ({
+        ...product,
+        sizes: sizes.filter((size) => size.productId === product.id),
+      })),
+      total: totalCount,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(totalCount / limitNum),
+    };
   }
 
   async getProduct(id: number): Promise<ProductWithSizes | undefined> {
@@ -312,6 +402,48 @@ export class DatabaseStorage implements IStorage {
 
   async getOrders(tenantId: number): Promise<Order[]> {
     return db.select().from(orders).where(eq(orders.tenantId, tenantId)).orderBy(desc(orders.createdAt));
+  }
+
+  async getAdminOrdersPaginated(tenantId: number, filters: AdminOrderListFilters): Promise<AdminPaginatedOrders> {
+    const pageNum = Math.max(1, Math.floor(filters.page ?? 1));
+    const limitNum = Math.min(100, Math.max(1, Math.floor(filters.limit ?? 20)));
+    const offset = (pageNum - 1) * limitNum;
+    const conditions: any[] = [eq(orders.tenantId, tenantId)];
+
+    if (filters.status && filters.status !== "all") {
+      conditions.push(eq(orders.status, filters.status));
+    }
+
+    if (filters.search) {
+      const pattern = `%${escapeLikePattern(filters.search)}%`;
+      conditions.push(
+        or(
+          sql`${orders.customerName} ILIKE ${pattern}`,
+          sql`${orders.phone} ILIKE ${pattern}`,
+          sql`CAST(${orders.id} AS TEXT) ILIKE ${pattern}`
+        ) as any
+      );
+    }
+
+    const whereClause = and(...conditions);
+    const [countRow] = await db.select({ count: count() }).from(orders).where(whereClause);
+    const totalCount = Number(countRow?.count ?? 0);
+
+    const pageOrders = await db
+      .select()
+      .from(orders)
+      .where(whereClause)
+      .orderBy(desc(orders.createdAt))
+      .limit(limitNum)
+      .offset(offset);
+
+    return {
+      orders: pageOrders,
+      total: totalCount,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(totalCount / limitNum),
+    };
   }
 
   async getOrdersByUserId(tenantId: number, userId: string): Promise<Order[]> {
@@ -526,6 +658,40 @@ export class DatabaseStorage implements IStorage {
           set: { label: d.label, description: d.description ?? null, type: d.type, updatedAt: new Date() },
         });
     }
+  }
+
+  async getAdminDashboardSummary(tenantId: number): Promise<AdminDashboardSummary> {
+    const tenantProducts = await db
+      .select({
+        enabled: products.enabled,
+        lowStockCount: sql<number>`(
+          SELECT COUNT(*)
+          FROM ${productSizes}
+          WHERE ${productSizes.productId} = ${products.id}
+            AND ${productSizes.stock} <= 5
+        )`,
+      })
+      .from(products)
+      .where(eq(products.tenantId, tenantId));
+
+    const tenantOrders = await db
+      .select({
+        total: orders.total,
+        status: orders.status,
+      })
+      .from(orders)
+      .where(eq(orders.tenantId, tenantId));
+
+    return {
+      totalRevenue: tenantOrders.reduce((sum, order) => sum + order.total, 0),
+      totalOrders: tenantOrders.length,
+      pendingOrders: tenantOrders.filter((order) => order.status === "pending").length,
+      inProgressOrders: tenantOrders.filter((order) => order.status === "confirmed" || order.status === "shipped").length,
+      deliveredOrders: tenantOrders.filter((order) => order.status === "delivered").length,
+      totalProducts: tenantProducts.length,
+      activeProducts: tenantProducts.filter((product) => product.enabled !== false).length,
+      lowStockSizes: tenantProducts.reduce((sum, product) => sum + Number(product.lowStockCount ?? 0), 0),
+    };
   }
 }
 

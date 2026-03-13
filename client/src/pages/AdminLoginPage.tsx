@@ -205,7 +205,7 @@ export default function AdminLoginPage({ onSuccess }: AdminLoginPageProps) {
               />
             </div>
 
-            <Button
+            {/* <Button
               type="button"
               variant="outline"
               className="w-full flex items-center justify-center gap-2"
@@ -213,7 +213,7 @@ export default function AdminLoginPage({ onSuccess }: AdminLoginPageProps) {
             >
               <MessageCircle className="h-4 w-4" />
               Continue with WhatsApp
-            </Button>
+            </Button> */}
 
             {showWhatsapp && (
               <div className="mt-3 space-y-4">

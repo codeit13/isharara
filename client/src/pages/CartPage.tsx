@@ -328,10 +328,37 @@ function PromoSection() {
   );
 }
 
+function PromoDiscountSummary({
+  code,
+  effectText,
+  discountAmount,
+}: {
+  code: string;
+  effectText: string;
+  discountAmount: number;
+}) {
+  return (
+    <div className="rounded-lg bg-green-50/60 px-3 py-2.5 text-green-700">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium">Discount</span>
+            <span className="max-w-full rounded-full border border-green-200 bg-white px-2 py-0.5 text-[11px] font-semibold tracking-[0.14em] text-green-700">
+              {code}
+            </span>
+          </div>
+        </div>
+        <span className="whitespace-nowrap text-sm font-semibold">- Rs. {discountAmount.toLocaleString()}</span>
+      </div>
+      <div className="mt-1.5 text-xs text-green-700/80">{effectText}</div>
+    </div>
+  );
+}
+
 // ── Main cart page ────────────────────────────────────────────────────────────
 export default function CartPage() {
   const { items, updateQuantity, removeItem, totalPrice } = useCart();
-  const { appliedPromo, discountAmount } = useCartPromo();
+  const { appliedPromo, discountAmount, getPromoEffectText } = useCartPromo();
   const { shippingFee, freeShippingThreshold, copyCartEmptyTitle, copyCartEmptyBody } = useSettings();
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
   const grandTotal = Math.max(0, totalPrice + shipping - discountAmount);
@@ -455,10 +482,11 @@ export default function CartPage() {
                 <span>Rs. {totalPrice.toLocaleString()}</span>
               </div>
               {appliedPromo && discountAmount > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span className="text-muted-foreground">Discount ({appliedPromo.code})</span>
-                  <span className="font-medium">- Rs. {discountAmount.toLocaleString()}</span>
-                </div>
+                <PromoDiscountSummary
+                  code={appliedPromo.code}
+                  effectText={getPromoEffectText(appliedPromo)}
+                  discountAmount={discountAmount}
+                />
               )}
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Shipping</span>
@@ -466,11 +494,11 @@ export default function CartPage() {
                   {shipping === 0 ? "Free 🎉" : `Rs. ${shipping}`}
                 </span>
               </div>
-              {shipping > 0 && (
+              {/* {shipping > 0 && (
                 <p className="text-[10px] text-primary bg-primary/5 rounded px-2 py-1">
                   Add Rs. {(freeShippingThreshold - totalPrice).toLocaleString()} more to get free shipping
                 </p>
-              )}
+              )} */}
               <Separator />
               <div className="flex justify-between font-bold text-base">
                 <span>Total</span>

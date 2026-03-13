@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import SubscribePopup from "@/components/SubscribePopup";
+// import SubscribePopup from "@/components/SubscribePopup";
 import HomePage from "@/pages/HomePage";
 import ShopPage from "@/pages/ShopPage";
 import ProductPage from "@/pages/ProductPage";
@@ -148,7 +148,7 @@ function App() {
         <TooltipProvider>
           <AppShell />
           {clientId && <GoogleOneTapPrompt />}
-          <SubscribePopup />
+          {/* <SubscribePopup /> */}
           <Toaster />
         </TooltipProvider>
       </GoogleOAuthProvider>

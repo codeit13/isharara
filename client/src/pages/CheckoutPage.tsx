@@ -21,6 +21,12 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import type { Order, Address } from "@shared/schema";
 
+function getDefaultPaymentMethod(razorpayEnabled: boolean, codEnabled: boolean) {
+  if (razorpayEnabled) return "razorpay";
+  if (codEnabled) return "cod";
+  return "upi";
+}
+
 export default function CheckoutPage() {
   const { items, totalPrice, clearCart } = useCart();
   const [, setLocation] = useLocation();
@@ -31,7 +37,7 @@ export default function CheckoutPage() {
     upiId: settingsUpiId, upiBusinessName: settingsUpiName, upiMerchantMode: settingsMerchantMode, upiMerchantCode: settingsMerchantCode,
     storeName, codEnabled, minOrderAmount, razorpayEnabled,
   } = useSettings();
-  const [paymentMethod, setPaymentMethod] = useState("upi");
+  const [paymentMethod, setPaymentMethod] = useState(() => getDefaultPaymentMethod(razorpayEnabled, codEnabled));
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedOrderId, setPlacedOrderId] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,10 +91,15 @@ export default function CheckoutPage() {
   }, [user, addresses]);
 
   useEffect(() => {
-    if (!razorpayEnabled && paymentMethod === "razorpay") {
-      setPaymentMethod("upi");
+    if (paymentMethod === "razorpay" && !razorpayEnabled) {
+      setPaymentMethod(getDefaultPaymentMethod(false, codEnabled));
+      return;
     }
-  }, [razorpayEnabled, paymentMethod]);
+    if (paymentMethod === "cod" && !codEnabled) {
+      setPaymentMethod(getDefaultPaymentMethod(razorpayEnabled, false));
+      return;
+    }
+  }, [codEnabled, paymentMethod, razorpayEnabled]);
 
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
   const discountAmount = getDiscountAmount(totalPrice + shipping);
@@ -98,6 +109,7 @@ export default function CheckoutPage() {
     const orderItems = items.map((i) => ({
       productId: i.productId,
       name: i.name,
+      image: i.image,
       size: i.size,
       price: i.price,
       quantity: i.quantity,
@@ -579,7 +591,7 @@ export default function CheckoutPage() {
                 <Input value={form.address} onChange={handleChange("address")} placeholder="Street, building, landmark" className="h-11" data-testid="input-address" />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Pincode</Label>
+                <Label className="text-xs font-medium">Pincode *</Label>
                 <Input value={form.pincode} onChange={handleChange("pincode")} placeholder="PIN code" className="h-11" data-testid="input-pincode" />
               </div>
             </div>
@@ -595,19 +607,6 @@ export default function CheckoutPage() {
               Payment Method
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <button
-                className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left min-h-[72px] ${
-                  paymentMethod === "upi" ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30 active:scale-[0.99]"
-                }`}
-                onClick={() => setPaymentMethod("upi")}
-                data-testid="button-payment-upi"
-              >
-                <Smartphone className="w-6 h-6 text-muted-foreground flex-shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold">UPI App</p>
-                  <p className="text-xs text-muted-foreground truncate">PhonePe, GPay, Paytm</p>
-                </div>
-              </button>
               {razorpayEnabled && (
                 <button
                   className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left min-h-[72px] ${
@@ -618,8 +617,8 @@ export default function CheckoutPage() {
                 >
                   <CreditCard className="w-6 h-6 text-muted-foreground flex-shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold">Card / Net Banking</p>
-                    <p className="text-xs text-muted-foreground truncate">Razorpay</p>
+                    <p className="text-sm font-semibold">UPI / Card / Net Banking</p>
+                    <p className="text-xs text-muted-foreground truncate">Secure checkout via Razorpay</p>
                   </div>
                 </button>
               )}
@@ -672,17 +671,26 @@ export default function CheckoutPage() {
                 <span>{shipping === 0 ? "Free" : `Rs. ${shipping}`}</span>
               </div>
               {appliedPromo && discountAmount > 0 && (
-                <div className="flex justify-between text-green-600">
-                  <span className="flex items-center gap-1.5">
-                    Discount ({appliedPromo.code})
-                    <span className="text-[10px] text-muted-foreground font-normal">{getPromoEffectText(appliedPromo)}</span>
+                <div className="rounded-lg bg-green-50/60 px-3 py-2.5 text-green-700">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium">Discount</span>
+                        <span className="max-w-full rounded-full border border-green-200 bg-white px-2 py-0.5 text-[11px] font-semibold tracking-[0.14em] text-green-700">
+                          {appliedPromo.code}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="whitespace-nowrap text-sm font-semibold">- Rs. {discountAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 text-green-700/80">{getPromoEffectText(appliedPromo)}</span>
                     <Link href="/cart">
-                      <button type="button" className="text-primary text-xs hover:underline" aria-label="Change promo in cart">
+                      <button type="button" className="shrink-0 font-medium text-primary hover:underline" aria-label="Change promo in cart">
                         Change
                       </button>
                     </Link>
-                  </span>
-                  <span>- Rs. {discountAmount.toLocaleString()}</span>
+                  </div>
                 </div>
               )}
               <Separator />
@@ -736,17 +744,26 @@ export default function CheckoutPage() {
                   <span>{shipping === 0 ? "Free" : `Rs. ${shipping}`}</span>
                 </div>
                 {appliedPromo && discountAmount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span className="flex flex-wrap items-center gap-1">
-                      Discount ({appliedPromo.code})
-                      <span className="text-[10px] text-muted-foreground font-normal">{getPromoEffectText(appliedPromo)}</span>
+                  <div className="rounded-lg bg-green-50/70 px-3 py-2.5 text-green-700">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-medium">Discount</span>
+                          <span className="max-w-full rounded-full border border-green-200 bg-white px-2 py-0.5 text-[11px] font-semibold tracking-[0.14em] text-green-700">
+                            {appliedPromo.code}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="whitespace-nowrap text-sm font-semibold">- Rs. {discountAmount.toLocaleString()}</span>
+                    </div>
+                    <div className="mt-1.5 flex items-center justify-between gap-3 text-xs">
+                      <span className="min-w-0 text-green-700/80">{getPromoEffectText(appliedPromo)}</span>
                       <Link href="/cart">
-                        <button type="button" className="text-primary text-xs hover:underline" aria-label="Change promo in cart">
+                        <button type="button" className="shrink-0 font-medium text-primary hover:underline" aria-label="Change promo in cart">
                           Change
                         </button>
                       </Link>
-                    </span>
-                    <span className="font-medium whitespace-nowrap">- Rs. {discountAmount.toLocaleString()}</span>
+                    </div>
                   </div>
                 )}
                 <Separator className="my-2" />

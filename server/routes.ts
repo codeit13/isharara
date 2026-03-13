@@ -27,6 +27,64 @@ import dns from "dns/promises";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
 
+const normalizeAdminText = (value: unknown) =>
+  typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
+
+const normalizeCategoryValue = (value: unknown, categories: unknown) => {
+  const values = [
+    ...(Array.isArray(categories) ? categories : []),
+    ...normalizeAdminText(value).split(","),
+  ]
+    .map((item) => normalizeAdminText(item))
+    .filter(Boolean);
+
+  return Array.from(new Set(values)).join(", ");
+};
+
+const adminProductPayloadSchema = z.object({
+  name: z.string().min(1),
+  brand: z.string().optional(),
+  description: z.string().optional(),
+  category: z.string().optional(),
+  categories: z.array(z.string()).optional(),
+  notes: z.union([z.array(z.string()), z.string()]).optional(),
+  image: z.string().optional(),
+  images: z.array(z.string()).optional(),
+  gender: z.string().optional(),
+  productType: z.string().optional(),
+  enabled: z.boolean().optional(),
+  isBestseller: z.boolean().optional(),
+  isTrending: z.boolean().optional(),
+  isNewArrival: z.boolean().optional(),
+});
+
+function parseAdminProductPayload(input: unknown) {
+  const parsed = adminProductPayloadSchema.parse(input);
+
+  const image = normalizeAdminText(parsed.image) || "/images/perfume-1.png";
+  const notes = Array.isArray(parsed.notes)
+    ? parsed.notes
+    : typeof parsed.notes === "string"
+      ? parsed.notes.split(",")
+      : [];
+
+  return {
+    name: normalizeAdminText(parsed.name),
+    brand: normalizeAdminText(parsed.brand) || "ISHQARA",
+    description: normalizeAdminText(parsed.description),
+    category: normalizeCategoryValue(parsed.category, parsed.categories) || "Uncategorized",
+    notes: Array.from(new Set(notes.map((note) => normalizeAdminText(note)).filter(Boolean))),
+    image,
+    images: parsed.images?.map((img) => normalizeAdminText(img)).filter(Boolean) || [image],
+    gender: normalizeAdminText(parsed.gender) || "unisex",
+    productType: normalizeAdminText(parsed.productType) || "og",
+    enabled: parsed.enabled ?? true,
+    isBestseller: parsed.isBestseller ?? false,
+    isTrending: parsed.isTrending ?? false,
+    isNewArrival: parsed.isNewArrival ?? false,
+  };
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -85,8 +143,16 @@ export async function registerRoutes(
   });
 
   app.get("/api/admin/products", isAuthenticated, requireAdmin, async (req, res) => {
-    const products = await storage.getAllProducts(req.tenant.id);
+    const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
+    const limit = Math.max(1, parseInt((req.query.limit as string) || "10", 10));
+    const search = ((req.query.search as string) || "").trim();
+    const products = await storage.getAdminProductsPaginated(req.tenant.id, { page, limit, search });
     res.json(products);
+  });
+
+  app.get("/api/admin/dashboard-summary", isAuthenticated, requireAdmin, async (req, res) => {
+    const summary = await storage.getAdminDashboardSummary(req.tenant.id);
+    res.json(summary);
   });
 
   app.get("/api/shop-filters", async (req, res) => {
@@ -182,6 +248,7 @@ export async function registerRoutes(
         items: z.array(z.object({
           productId: z.number(),
           name: z.string(),
+          image: z.string().optional(), // product image URL per line item (for admin order details)
           size: z.string(),
           price: z.number(),
           quantity: z.number().min(1),
@@ -340,7 +407,11 @@ export async function registerRoutes(
   });
 
   app.get("/api/admin/orders", isAuthenticated, requireAdmin, async (req, res) => {
-    const allOrders = await storage.getOrders(req.tenant.id);
+    const page = Math.max(1, parseInt((req.query.page as string) || "1", 10));
+    const limit = Math.max(1, parseInt((req.query.limit as string) || "10", 10));
+    const search = ((req.query.search as string) || "").trim();
+    const status = ((req.query.status as string) || "all").trim();
+    const allOrders = await storage.getAdminOrdersPaginated(req.tenant.id, { page, limit, search, status });
     res.json(allOrders);
   });
 
@@ -361,6 +432,7 @@ export async function registerRoutes(
   app.post("/api/admin/products", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const { sizes, ...productData } = req.body;
+      const validatedProduct = parseAdminProductPayload(productData);
       const sizeSchema = z.array(z.object({
         size: z.string(),
         price: z.number().min(0),
@@ -368,7 +440,7 @@ export async function registerRoutes(
         stock: z.number().min(0),
       })).min(1);
       const validatedSizes = sizeSchema.parse(sizes);
-      const product = await storage.createProduct(req.tenant.id, productData, validatedSizes.map(s => ({ ...s, productId: 0 })));
+      const product = await storage.createProduct(req.tenant.id, validatedProduct, validatedSizes.map(s => ({ ...s, productId: 0 })));
       res.json(product);
     } catch (e: any) {
       res.status(400).json({ message: e.message });
@@ -378,6 +450,7 @@ export async function registerRoutes(
   app.put("/api/admin/products/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const { sizes, ...productData } = req.body;
+      const validatedProduct = parseAdminProductPayload(productData);
       const sizeSchema = z.array(z.object({
         id: z.number().optional(),
         size: z.string(),
@@ -386,7 +459,7 @@ export async function registerRoutes(
         stock: z.number().min(0),
       })).min(1);
       const validatedSizes = sizeSchema.parse(sizes);
-      const product = await storage.updateProduct(Number(req.params.id), productData, validatedSizes.map(s => ({ ...s, originalPrice: s.originalPrice ?? null })));
+      const product = await storage.updateProduct(Number(req.params.id), validatedProduct, validatedSizes.map(s => ({ ...s, originalPrice: s.originalPrice ?? null })));
       if (!product) return res.status(404).json({ message: "Product not found" });
       res.json(product);
     } catch (e: any) {

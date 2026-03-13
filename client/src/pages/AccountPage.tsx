@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import SEOHead from "@/components/SEOHead";
 import { useLocation } from "wouter";
 import {
   Package, Clock, CheckCircle2, Truck, XCircle,
-  MapPin, Plus, Pencil, Trash2, Star,
+  MapPin, Plus, Pencil, Trash2, Star, CreditCard,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import type { Order, Address } from "@shared/schema";
@@ -368,6 +369,32 @@ export default function AccountPage() {
     refetchOnMount: "always",
   });
 
+  const productIdsToFetch = (orders ?? []).length > 0
+    ? Array.from(new Set((orders ?? []).flatMap((o) => (o.items as { productId?: number; image?: string }[]).filter((i) => i.productId && !i.image).map((i) => i.productId!))))
+    : [];
+
+  const productQueries = useQueries({
+    queries: productIdsToFetch.map((id) => ({
+      queryKey: ["/api/products", id],
+      queryFn: async () => {
+        const res = await fetch(`/api/products/${id}`, { credentials: "include" });
+        if (!res.ok) throw new Error("Failed to fetch product");
+        return res.json();
+      },
+      staleTime: 60_000,
+    })),
+  });
+
+  const productImageMap: Record<number, string> = {};
+  productQueries.forEach((q, i) => {
+    const product = q.data as { image?: string } | undefined;
+    const id = productIdsToFetch[i];
+    if (product?.image && id != null) productImageMap[id] = product.image;
+  });
+
+  const getItemImage = (item: { productId?: number; image?: string }) =>
+    item.image ?? (item.productId ? productImageMap[item.productId] : undefined);
+
   if (authLoading) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
@@ -445,57 +472,109 @@ export default function AccountPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <Accordion type="single" collapsible className="space-y-2">
             {orders.map((order) => {
               const status = statusConfig[order.status] || statusConfig.pending;
               const StatusIcon = status.icon;
-              const orderItems = order.items as Array<{ name: string; size: string; price: number; quantity: number }>;
+              const orderItems = order.items as Array<{ productId?: number; name: string; image?: string; size: string; price: number; quantity: number }>;
+              const itemCount = orderItems.length;
+              const summary = `${itemCount} ${itemCount === 1 ? "item" : "items"} · Rs. ${order.total.toLocaleString()}`;
 
               return (
-                <Card key={order.id} className="overflow-hidden" data-testid={`card-order-${order.id}`}>
-                  <CardHeader className="p-4 pb-3 flex flex-row items-center justify-between bg-muted/30">
-                    <div className="flex items-center gap-3">
-                      <CardTitle className="text-sm font-medium" data-testid={`text-order-id-${order.id}`}>
-                        Order #{order.id}
-                      </CardTitle>
-                      <Badge variant="outline" className={`text-xs ${status.color}`}>
-                        <StatusIcon className="w-3 h-3 mr-1" />
-                        {status.label}
-                      </Badge>
+                <AccordionItem key={order.id} value={String(order.id)} className="border rounded-lg bg-card px-4 data-[state=open]:bg-muted/10" data-testid={`card-order-${order.id}`}>
+                  <AccordionTrigger className="py-4 hover:no-underline [&[data-state=open]>svg]:rotate-180">
+                    <div className="flex flex-wrap items-center justify-between gap-3 w-full text-left">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-base font-semibold" data-testid={`text-order-id-${order.id}`}>
+                          Order #{order.id}
+                        </span>
+                        <Badge variant="outline" className={`text-xs ${status.color}`}>
+                          <StatusIcon className="w-3 h-3 mr-1" />
+                          {status.label}
+                        </Badge>
+                        <span className="text-sm text-muted-foreground hidden sm:inline">{summary}</span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(order.createdAt).toLocaleDateString("en-IN", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </span>
-                  </CardHeader>
-                  <CardContent className="p-4 pt-3">
-                    <div className="space-y-2">
-                      {orderItems.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            {item.name} ({item.size}) x{item.quantity}
-                          </span>
-                          <span className="font-medium">Rs. {item.price * item.quantity}</span>
+                  </AccordionTrigger>
+                  <AccordionContent className="pb-4 pt-0">
+                    <div className="space-y-4">
+                      {/* Items with images */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Items</p>
+                        <div className="space-y-3">
+                          {orderItems.map((item, idx) => {
+                            const imageUrl = getItemImage(item);
+                            return (
+                            <div key={idx} className="flex gap-3">
+                              {imageUrl ? (
+                                <img src={imageUrl} alt={item.name} className="h-14 w-11 rounded-md object-cover shrink-0 border" />
+                              ) : (
+                                <div className="h-14 w-11 rounded-md bg-muted/50 shrink-0 flex items-center justify-center border">
+                                  <Package className="h-5 w-5 text-muted-foreground/50" />
+                                </div>
+                              )}
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium truncate">{item.name}</p>
+                                <p className="text-xs text-muted-foreground">{item.size} × {item.quantity}</p>
+                              </div>
+                              <p className="text-sm font-semibold shrink-0">Rs. {(item.price * item.quantity).toLocaleString()}</p>
+                            </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Delivery address */}
+                      <div>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1.5 flex items-center gap-1.5">
+                          <MapPin className="h-3.5 w-3.5" /> Delivery address
+                        </p>
+                        <p className="text-sm">{order.customerName}</p>
+                        <p className="text-sm text-muted-foreground">{order.address}</p>
+                        <p className="text-sm text-muted-foreground">{order.city} · {order.pincode}</p>
+                        {order.phone && <p className="text-xs text-muted-foreground mt-0.5">{order.phone}</p>}
+                      </div>
+
+                      <Separator />
+
+                      {/* Price breakdown */}
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span>Rs. {order.subtotal.toLocaleString()}</span>
+                        </div>
+                        {order.discount > 0 && (
+                          <div className="flex justify-between text-green-600">
+                            <span>Discount</span>
+                            <span>− Rs. {order.discount.toLocaleString()}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between pt-1.5 font-semibold">
+                          <span>Total</span>
+                          <span className="text-primary" data-testid={`text-order-total-${order.id}`}>Rs. {order.total.toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      {/* Payment method */}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground pt-1">
+                        <CreditCard className="h-4 w-4 shrink-0" />
+                        <span>
+                          {order.paymentMethod === "upi" ? "Paid via UPI" : order.paymentMethod === "razorpay" ? "Paid online (Razorpay)" : "Cash on Delivery"}
+                        </span>
+                      </div>
                     </div>
-                    <Separator className="my-3" />
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
-                        {order.paymentMethod === "upi" ? "Paid via UPI" : order.paymentMethod === "razorpay" ? "Paid Online (Razorpay)" : "Cash on Delivery"}
-                      </span>
-                      <span className="font-bold text-primary" data-testid={`text-order-total-${order.id}`}>
-                        Rs. {order.total}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
+                  </AccordionContent>
+                </AccordionItem>
               );
             })}
-          </div>
+          </Accordion>
         )}
       </div>
     </div>
