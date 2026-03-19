@@ -6,14 +6,15 @@ import { z } from "zod";
 import { isAuthenticated, requireAdmin, requireSuperAdmin, optionalAuth } from "./auth";
 import { authStorage, normalizePhone } from "./auth/storage";
 import { invalidateTenantCache } from "./tenant";
-import { tenants, tenantMembers, tenantPayments, products, orders, users } from "@shared/schema";
+import { tenants, tenantMembers, tenantPayments, products, productSizes, orders, users } from "@shared/schema";
 import { db } from "./db";
-import { eq, sql, and, lte, desc } from "drizzle-orm";
+import { eq, sql, and, lte, desc, inArray } from "drizzle-orm";
 import {
   isRazorpayConfigured,
   getRazorpayKeyId,
   createRazorpayOrder,
   verifyPaymentSignature,
+  verifyWebhookSignature,
 } from "./razorpay";
 import {
   uploadSingleImage,
@@ -272,7 +273,7 @@ export async function registerRoutes(
           name: z.string(),
           image: z.string().optional(), // product image URL per line item (for admin order details)
           size: z.string(),
-          price: z.number(),
+          price: z.number(), // client-side price, will be overridden by backend
           quantity: z.number().min(1),
         })).min(1),
         subtotal: z.number().min(0),
@@ -285,7 +286,40 @@ export async function registerRoutes(
       const user = (req as any).user;
       const userId = user?.id || null;
 
-      if (data.discount > 0 && data.promoCode) {
+      // ── Recompute pricing server-side from product catalog ────────────────────
+      const productIds = Array.from(new Set(data.items.map((i) => i.productId)));
+      const dbSizes = await db
+        .select({
+          productId: productSizes.productId,
+          size: productSizes.size,
+          price: productSizes.price,
+        })
+        .from(productSizes)
+        .where(inArray(productSizes.productId, productIds));
+
+      const sizePriceMap = new Map<string, number>();
+      for (const row of dbSizes) {
+        sizePriceMap.set(`${row.productId}:${row.size}`, row.price);
+      }
+
+      const enrichedItems = data.items.map((item) => {
+        const key = `${item.productId}:${item.size}`;
+        const dbPrice = sizePriceMap.get(key);
+        if (dbPrice == null) {
+          throw new Error(`Invalid product/size in cart (product ${item.productId}, size ${item.size})`);
+        }
+        return {
+          ...item,
+          price: dbPrice,
+        };
+      });
+
+      const subtotal = enrichedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const shipping = await computeTenantShippingFee(tid, subtotal);
+
+      // ── Promo & discount validation using recomputed prices ───────────────────
+      let discount = 0;
+      if (data.promoCode) {
         const promos = await storage.getPromotions(tid);
         const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === data.promoCode!.trim().toUpperCase());
         if (!promo) {
@@ -298,21 +332,34 @@ export async function registerRoutes(
           }
         }
         const minOrder = promo.minOrderAmount ?? 0;
-        if (minOrder > 0 && data.subtotal < minOrder) {
+        if (minOrder > 0 && subtotal < minOrder) {
           return res.status(400).json({
             message: `Minimum order of Rs. ${minOrder.toLocaleString("en-IN")} required for this code`,
           });
         }
-        const shipping = await computeTenantShippingFee(tid, data.subtotal);
-        const discountBase = data.subtotal + shipping;
-        const expectedDiscount = computePromoDiscount(promo, data.subtotal, discountBase, data.items);
-        if (data.discount !== expectedDiscount) {
-          return res.status(400).json({ message: "Invalid discount for this order" });
-        }
+        const discountBase = subtotal + shipping;
+        const expectedDiscount = computePromoDiscount(
+          promo,
+          subtotal,
+          discountBase,
+          enrichedItems.map((i) => ({ price: i.price, quantity: i.quantity })),
+        );
+        discount = expectedDiscount;
       }
 
-      const { promoCode: _pc, ...orderData } = data;
-      const order = await storage.createOrder(tid, { ...orderData, userId });
+      const total = Math.max(0, subtotal + shipping - discount);
+
+      const { promoCode: _pc, ...rest } = data;
+      const orderPayload = {
+        ...rest,
+        items: enrichedItems,
+        subtotal,
+        discount,
+        total,
+        userId,
+      };
+
+      const order = await storage.createOrder(tid, orderPayload);
 
       if (user) {
         const normalizedPhone = normalizePhone(data.phone);
@@ -355,7 +402,7 @@ export async function registerRoutes(
         if (!razorpayEnabled || !isRazorpayConfigured()) {
           return res.status(503).json({ message: "Online payment is temporarily unavailable" });
         }
-        const amountPaise = Math.round(data.total * 100);
+        const amountPaise = Math.round(total * 100);
         const rzpOrder = await createRazorpayOrder(amountPaise, String(order.id));
         await storage.setOrderRazorpayOrderId(order.id, rzpOrder.id);
         return res.json({
@@ -410,6 +457,51 @@ export async function registerRoutes(
       res.json({ order: updated });
     } catch (e: any) {
       res.status(400).json({ message: e.message || "Verification failed" });
+    }
+  });
+
+  // ── Razorpay webhook: payment captured → confirm order ────────────────────────
+  app.post("/api/razorpay/webhook", async (req, res) => {
+    try {
+      const signature = req.header("x-razorpay-signature");
+      const rawBody = (req as any).rawBody as Buffer | undefined;
+      if (!rawBody) {
+        return res.status(400).json({ message: "Missing raw body for signature verification" });
+      }
+
+      const valid = verifyWebhookSignature(rawBody, signature);
+      if (!valid) {
+        return res.status(400).json({ message: "Invalid webhook signature" });
+      }
+
+      const event = (req.body as any)?.event as string | undefined;
+      const payment = (req.body as any)?.payload?.payment?.entity;
+
+      if (!payment || !payment.order_id || !payment.id) {
+        return res.status(200).json({ received: true });
+      }
+
+      // We only auto-confirm on successful/captured payments.
+      if (event === "payment.captured" || payment.status === "captured") {
+        const razorpayOrderId = String(payment.order_id);
+        const razorpayPaymentId = String(payment.id);
+
+        // Update any matching order: set payment id + mark confirmed.
+        const updated = await db
+          .update(orders)
+          .set({ razorpayPaymentId, status: "confirmed" })
+          .where(eq(orders.razorpayOrderId, razorpayOrderId))
+          .returning();
+
+        // Idempotent: even if no order found we still ack the webhook.
+        if (updated.length > 0) {
+          return res.json({ received: true, updated: updated[0].id });
+        }
+      }
+
+      res.json({ received: true });
+    } catch (e: any) {
+      res.status(400).json({ message: e.message || "Webhook handling failed" });
     }
   });
 

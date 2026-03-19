@@ -3,6 +3,7 @@ import crypto from "crypto";
 
 const keyId = process.env.RAZORPAY_KEY_ID;
 const keySecret = process.env.RAZORPAY_KEY_SECRET;
+const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
 
 export function isRazorpayConfigured(): boolean {
   return !!(keyId && keySecret);
@@ -50,5 +51,13 @@ export function verifyPaymentSignature(
   if (!keySecret) return false;
   const body = `${razorpayOrderId}|${razorpayPaymentId}`;
   const expected = crypto.createHmac("sha256", keySecret).update(body).digest("hex");
+  return expected === signature;
+}
+
+/** Verify a Razorpay webhook payload using RAZORPAY_WEBHOOK_SECRET. */
+export function verifyWebhookSignature(payload: Buffer | string, signature: string | undefined | null): boolean {
+  if (!webhookSecret || !signature) return false;
+  const body = Buffer.isBuffer(payload) ? payload.toString("utf8") : payload;
+  const expected = crypto.createHmac("sha256", webhookSecret).update(body).digest("hex");
   return expected === signature;
 }

@@ -364,9 +364,10 @@ function PromoDiscountSummary({
 // ── Main cart page ────────────────────────────────────────────────────────────
 export default function CartPage() {
   const { items, updateQuantity, removeItem, totalPrice } = useCart();
-  const { appliedPromo, discountAmount, getPromoEffectText } = useCartPromo();
+  const { appliedPromo, getDiscountAmount, getPromoEffectText } = useCartPromo();
   const { shippingFee, freeShippingThreshold, copyCartEmptyTitle, copyCartEmptyBody } = useSettings();
   const shipping = totalPrice >= freeShippingThreshold ? 0 : shippingFee;
+  const discountAmount = getDiscountAmount(totalPrice + shipping);
   const grandTotal = Math.max(0, totalPrice + shipping - discountAmount);
   const cartProductIds = items.map((i) => i.productId);
 

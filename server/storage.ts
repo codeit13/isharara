@@ -43,7 +43,9 @@ export interface PaginatedProducts {
 }
 
 export interface AdminDashboardSummary {
+  /** Sum of order totals where status is confirmed, shipped, or delivered */
   totalRevenue: number;
+  /** Count of those orders (same status filter as totalRevenue) */
   totalOrders: number;
   pendingOrders: number;
   inProgressOrders: number;
@@ -51,6 +53,13 @@ export interface AdminDashboardSummary {
   totalProducts: number;
   activeProducts: number;
   lowStockSizes: number;
+}
+
+/** Revenue includes orders in these fulfillment statuses (excludes pending & cancelled). */
+const REVENUE_ORDER_STATUSES = new Set(["confirmed", "shipped", "delivered"]);
+
+function countsTowardRevenue(status: string): boolean {
+  return REVENUE_ORDER_STATUSES.has(status);
 }
 
 export interface AdminProductListFilters {
@@ -682,9 +691,11 @@ export class DatabaseStorage implements IStorage {
       .from(orders)
       .where(eq(orders.tenantId, tenantId));
 
+    const revenueOrders = tenantOrders.filter((order) => countsTowardRevenue(order.status));
+
     return {
-      totalRevenue: tenantOrders.reduce((sum, order) => sum + order.total, 0),
-      totalOrders: tenantOrders.length,
+      totalRevenue: revenueOrders.reduce((sum, order) => sum + order.total, 0),
+      totalOrders: revenueOrders.length,
       pendingOrders: tenantOrders.filter((order) => order.status === "pending").length,
       inProgressOrders: tenantOrders.filter((order) => order.status === "confirmed" || order.status === "shipped").length,
       deliveredOrders: tenantOrders.filter((order) => order.status === "delivered").length,

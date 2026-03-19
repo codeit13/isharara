@@ -4,7 +4,7 @@ import {
   Package, ShoppingCart, Tag, Users, Plus, Pencil, Trash2,
   Eye, ShieldAlert, Upload, Download, FileSpreadsheet, ExternalLink,
   Check, CheckCircle2, ChevronsUpDown, Search, XCircle, AlertCircle, TrendingUp, IndianRupee, Settings,
-  CreditCard, MapPin, MoreHorizontal, Package2, Phone, Receipt, TicketPercent,
+  CreditCard, MapPin, MoreHorizontal, Package2, Phone, Receipt, TicketPercent, Info,
 } from "lucide-react";
 import Papa from "papaparse";
 import { Button } from "@/components/ui/button";
@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import {
@@ -97,7 +98,8 @@ function DashboardStats({ summary }: { summary: AdminDashboardSummary }) {
     {
       label: "Total Revenue",
       value: `Rs. ${summary.totalRevenue.toLocaleString()}`,
-      sub: `${summary.totalOrders} orders`,
+      sub: `${summary.totalOrders} paid order${summary.totalOrders === 1 ? "" : "s"}`,
+      subTooltip: "Includes orders marked Confirmed, Shipped, or Delivered.",
       icon: IndianRupee,
       bg: "bg-green-50 dark:bg-green-950/30",
       iconColor: "text-green-600",
@@ -131,16 +133,42 @@ function DashboardStats({ summary }: { summary: AdminDashboardSummary }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-5">
       {stats.map((stat) => (
-        <Card key={stat.label} className="border shadow-sm" data-testid={`stat-${stat.label.toLowerCase().replace(/\s/g, '-')}`}>
+        <Card
+          key={stat.label}
+          className="border shadow-sm"
+          data-testid={`stat-${stat.label.toLowerCase().replace(/\s/g, '-')}`}
+        >
           <CardContent className={`p-3 rounded-lg ${stat.bg}`}>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">{stat.label}</p>
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                {stat.label}
+              </p>
               <div className={`p-1 rounded-md bg-background/60 ${stat.iconColor}`}>
                 <stat.icon className="w-3 h-3" />
               </div>
             </div>
             <p className="text-xl font-bold">{stat.value}</p>
-            <p className="text-[11px] text-muted-foreground mt-0.5">{stat.sub}</p>
+            {stat.subTooltip ? (
+              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                <span>{stat.sub}</span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] text-muted-foreground hover:bg-background"
+                      aria-label={stat.subTooltip}
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs text-xs">
+                    {stat.subTooltip}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground mt-0.5">{stat.sub}</p>
+            )}
           </CardContent>
         </Card>
       ))}
