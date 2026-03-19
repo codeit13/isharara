@@ -64,11 +64,23 @@ export default function DealsPage() {
                 <div>
                   <h3 className="font-semibold text-sm mb-1">{promo.title}</h3>
                   <p className="text-xs text-muted-foreground mb-2">{promo.description}</p>
-                  {promo.code && (
-                    <Badge variant="outline" className="text-xs font-mono">
-                      {promo.code}
-                    </Badge>
-                  )}
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {promo.code && (
+                      <Badge variant="outline" className="text-xs font-mono">
+                        {promo.code}
+                      </Badge>
+                    )}
+                    {(promo.minOrderAmount ?? 0) > 0 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Min. Rs. {promo.minOrderAmount}
+                      </Badge>
+                    )}
+                    {promo.firstOrderOnly && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        First order
+                      </Badge>
+                    )}
+                  </div>
                   {promo.endDate && (
                     <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                       <Clock className="w-3 h-3" />

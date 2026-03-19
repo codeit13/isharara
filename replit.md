@@ -25,6 +25,7 @@ A mobile-responsive e-commerce web application for ISHQARA, a premium perfume br
 - `GET /api/products/:id/reviews` - Product reviews
 - `POST /api/products/:id/reviews` - Add review
 - `GET /api/promotions` - List promotions
+- `POST /api/checkout/validate-promo` - Validate promo code (body: `code`, optional `email`, optional `subtotal` for minimum-order rules)
 - `POST /api/orders` - Place order
 - `POST /api/subscribers` - Subscribe email/phone
 - `GET /api/admin/orders` - Admin: list orders
@@ -45,3 +46,4 @@ A mobile-responsive e-commerce web application for ISHQARA, a premium perfume br
 - PostgreSQL with Drizzle ORM
 - Tables: users, products, product_sizes, reviews, orders, promotions, subscribers
 - Seed data: 8 perfume products, sample reviews, 3 promotions
+- Promotions: optional `min_order_amount` (₹) — discount applies only when line-item subtotal (pre-shipping) meets the threshold; `0` means no minimum. After pulling schema changes, run `npm run db:push`.

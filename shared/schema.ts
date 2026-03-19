@@ -90,6 +90,8 @@ export const promotions = pgTable("promotions", {
   code: text("code"),
   isActive: boolean("is_active").notNull().default(true),
   firstOrderOnly: boolean("first_order_only").notNull().default(false),
+  /** Minimum merchandise subtotal (₹) required; 0 = no minimum */
+  minOrderAmount: integer("min_order_amount").notNull().default(0),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
 });

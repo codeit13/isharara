@@ -150,6 +150,7 @@ function PromoSection() {
     removePromo,
     getPromoEffectText,
     bundleItemsNeeded,
+    minOrderShortfall,
     hasPromoCodes,
     availablePromos,
   } = useCartPromo();
@@ -253,6 +254,11 @@ function PromoSection() {
               Add {bundleItemsNeeded} more to unlock
             </span>
           )}
+          {minOrderShortfall > 0 && (
+            <span className="text-xs text-amber-600 dark:text-amber-400">
+              Add Rs. {minOrderShortfall.toLocaleString("en-IN")} more to unlock discount
+            </span>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
@@ -333,7 +339,7 @@ function PromoDiscountSummary({
   effectText,
   discountAmount,
 }: {
-  code: string;
+  code: string | null;
   effectText: string;
   discountAmount: number;
 }) {

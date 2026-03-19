@@ -103,7 +103,7 @@ export function useSettings() {
   });
 
   const tenant = useTenant();
-  const settings: AppSettings = { ...DEFAULTS, ...(data as Partial<AppSettings>) };
+  const settings = { ...DEFAULTS, ...(data ?? {}) } as AppSettings;
 
   // Tenant table takes priority over settings table for overlapping fields
   if (tenant?.name) settings.store_name = tenant.name;

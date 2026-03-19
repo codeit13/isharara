@@ -9,6 +9,7 @@ export async function seedDatabase() {
     await ensureDemoUser();
     await ensureB2G1PromoDescription();
     await ensureFirstOrderPromo();
+    await ensureSummerPromoMinOrder();
     return;
   }
 
@@ -217,6 +218,7 @@ export async function seedDatabase() {
       discountValue: 200,
       code: "SUMMER200",
       isActive: true,
+      minOrderAmount: 1999,
     },
   ]);
 
@@ -237,6 +239,16 @@ async function ensureFirstOrderPromo() {
   const [first10] = await db.select().from(promotions).where(eq(promotions.code, "FIRST10"));
   if (first10 && !(first10 as { firstOrderOnly?: boolean }).firstOrderOnly) {
     await db.update(promotions).set({ firstOrderOnly: true } as any).where(eq(promotions.code, "FIRST10"));
+  }
+}
+
+/** Backfill SUMMER200 minimum order threshold for existing databases */
+async function ensureSummerPromoMinOrder() {
+  const [summer] = await db.select().from(promotions).where(eq(promotions.code, "SUMMER200"));
+  if (!summer) return;
+  const min = (summer as { minOrderAmount?: number }).minOrderAmount ?? 0;
+  if (min < 1999) {
+    await db.update(promotions).set({ minOrderAmount: 1999 }).where(eq(promotions.code, "SUMMER200"));
   }
 }
 
@@ -283,6 +295,7 @@ async function ensureDemoUser() {
  * tenant_members with 'owner' role, and mark them as isSuperAdmin.
  */
 export async function migrateMultiTenant() {
+  await ensureSummerPromoMinOrder();
   // 1. Ensure the default tenant exists (id = 1, slug = "ishqara")
   const [existing] = await db.select().from(tenants).where(eq(tenants.slug, "ishqara"));
   if (!existing) {

@@ -24,8 +24,20 @@ import {
   sanitizeProductName,
 } from "./uploads";
 import dns from "dns/promises";
+import { computePromoDiscount } from "@shared/promo-discount";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024 } });
+
+async function computeTenantShippingFee(tenantId: number, subtotal: number): Promise<number> {
+  const feeRaw = await storage.getSetting(tenantId, "shipping_fee");
+  const thresholdRaw = await storage.getSetting(tenantId, "free_shipping_threshold");
+  const fee = Number(feeRaw);
+  const threshold = Number(thresholdRaw);
+  const shippingFee = Number.isFinite(fee) ? fee : 0;
+  const freeAbove = Number.isFinite(threshold) ? threshold : 0;
+  if (subtotal >= freeAbove) return 0;
+  return shippingFee;
+}
 
 const normalizeAdminText = (value: unknown) =>
   typeof value === "string" ? value.trim().replace(/\s+/g, " ") : "";
@@ -200,6 +212,8 @@ export async function registerRoutes(
       const body = z.object({
         code: z.string().min(1),
         email: z.string().email().optional(),
+        /** Merchandise subtotal — required to enforce minimum-order promos */
+        subtotal: z.number().min(0).optional(),
       }).parse(req.body);
       const user = (req as any).user;
       const userId = user?.id ?? null;
@@ -227,6 +241,14 @@ export async function registerRoutes(
         if (hasOrdered) {
           return res.json({ valid: false, reason: "This code is for first-time customers only" });
         }
+      }
+
+      const minOrder = promo.minOrderAmount ?? 0;
+      if (minOrder > 0 && body.subtotal !== undefined && body.subtotal < minOrder) {
+        return res.json({
+          valid: false,
+          reason: `Minimum order of Rs. ${minOrder.toLocaleString("en-IN")} required for this code`,
+        });
       }
 
       res.json({ valid: true, promo });
@@ -266,11 +288,26 @@ export async function registerRoutes(
       if (data.discount > 0 && data.promoCode) {
         const promos = await storage.getPromotions(tid);
         const promo = promos.find((p) => p.isActive && p.code?.toUpperCase() === data.promoCode!.trim().toUpperCase());
-        if (promo?.firstOrderOnly) {
+        if (!promo) {
+          return res.status(400).json({ message: "Invalid or inactive promo code" });
+        }
+        if (promo.firstOrderOnly) {
           const hasOrdered = await storage.hasOrderedBefore(tid, userId, data.email);
           if (hasOrdered) {
             return res.status(400).json({ message: "This code is for first-time customers only" });
           }
+        }
+        const minOrder = promo.minOrderAmount ?? 0;
+        if (minOrder > 0 && data.subtotal < minOrder) {
+          return res.status(400).json({
+            message: `Minimum order of Rs. ${minOrder.toLocaleString("en-IN")} required for this code`,
+          });
+        }
+        const shipping = await computeTenantShippingFee(tid, data.subtotal);
+        const discountBase = data.subtotal + shipping;
+        const expectedDiscount = computePromoDiscount(promo, data.subtotal, discountBase, data.items);
+        if (data.discount !== expectedDiscount) {
+          return res.status(400).json({ message: "Invalid discount for this order" });
         }
       }
 
@@ -642,6 +679,7 @@ export async function registerRoutes(
         code: z.string().nullable().optional(),
         isActive: z.boolean().optional().default(true),
         firstOrderOnly: z.boolean().optional().default(false),
+        minOrderAmount: z.number().min(0).optional().default(0),
         startDate: z.any().nullable().optional(),
         endDate: z.any().nullable().optional(),
       });
@@ -663,6 +701,7 @@ export async function registerRoutes(
         code: z.string().nullable().optional(),
         isActive: z.boolean().optional(),
         firstOrderOnly: z.boolean().optional(),
+        minOrderAmount: z.number().min(0).optional(),
         startDate: z.any().nullable().optional(),
         endDate: z.any().nullable().optional(),
       });

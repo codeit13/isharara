@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useCart } from "@/lib/cart";
 import { getTenantSlug } from "@/hooks/use-tenant";
 import type { Promotion } from "@shared/schema";
+import { computePromoDiscount } from "@shared/promo-discount";
 
 function promoKey(): string {
   return `cart_promo_${getTenantSlug()}`;
@@ -50,46 +51,49 @@ export function useCartPromo() {
     }
   }, [items.length, appliedPromo]);
 
-  const getDiscountAmount = useCallback((baseAmount: number = totalPrice) => {
-    if (!appliedPromo || !appliedPromo.isActive) return 0;
-    if (appliedPromo.discountType === "percentage") {
-      return Math.round(baseAmount * (appliedPromo.discountValue / 100));
-    }
-    if (appliedPromo.discountType === "flat") {
-      return Math.min(appliedPromo.discountValue, baseAmount);
-    }
-    if (appliedPromo.discountType === "bundle") {
-      const unitPrices = items.flatMap((i) => Array(i.quantity).fill(i.price));
-      unitPrices.sort((a, b) => a - b);
-      const freeCount = Math.floor(unitPrices.length / 3);
-      return unitPrices.slice(0, freeCount).reduce((sum, p) => sum + p, 0);
-    }
-    return 0;
-  }, [appliedPromo, totalPrice, items]);
+  const getDiscountAmount = useCallback(
+    (baseAmount: number = totalPrice) => {
+      if (!appliedPromo || !appliedPromo.isActive) return 0;
+      const lines = items.map((i) => ({ price: i.price, quantity: i.quantity }));
+      return computePromoDiscount(appliedPromo, totalPrice, baseAmount, lines);
+    },
+    [appliedPromo, totalPrice, items],
+  );
 
   const discountAmount = getDiscountAmount(totalPrice);
 
-  const applyPromo = useCallback(async (code: string, email?: string) => {
-    const trimmed = code.trim();
-    if (!trimmed) return { success: false, reason: "Enter a code" };
-    try {
-      const res = await fetch("/api/checkout/validate-promo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ code: trimmed, email: email || undefined }),
-      });
-      const data = await res.json();
-      if (data.valid && data.promo) {
-        setAppliedPromo(data.promo);
-        savePromo(data.promo);
-        return { success: true };
+  const minOrder = appliedPromo?.minOrderAmount ?? 0;
+  const minOrderShortfall =
+    appliedPromo && minOrder > 0 && totalPrice < minOrder ? minOrder - totalPrice : 0;
+
+  const applyPromo = useCallback(
+    async (code: string, email?: string) => {
+      const trimmed = code.trim();
+      if (!trimmed) return { success: false, reason: "Enter a code" };
+      try {
+        const res = await fetch("/api/checkout/validate-promo", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            code: trimmed,
+            email: email || undefined,
+            subtotal: totalPrice,
+          }),
+        });
+        const data = await res.json();
+        if (data.valid && data.promo) {
+          setAppliedPromo(data.promo);
+          savePromo(data.promo);
+          return { success: true };
+        }
+        return { success: false, reason: data.reason || "Invalid or expired code" };
+      } catch {
+        return { success: false, reason: "Invalid or expired code" };
       }
-      return { success: false, reason: data.reason || "Invalid or expired code" };
-    } catch {
-      return { success: false, reason: "Invalid or expired code" };
-    }
-  }, []);
+    },
+    [totalPrice],
+  );
 
   const removePromo = useCallback(() => {
     setAppliedPromo(null);
@@ -97,9 +101,11 @@ export function useCartPromo() {
   }, []);
 
   const getPromoEffectText = (p: Promotion): string => {
-    if (p.discountType === "percentage") return `${p.discountValue}% off your order`;
-    if (p.discountType === "flat") return `Rs. ${p.discountValue} off your order`;
-    if (p.discountType === "bundle") return "Buy 2 Get 1 Free — cheapest item free per 3 items";
+    const min = p.minOrderAmount ?? 0;
+    const minSuffix = min > 0 ? ` (min. order Rs. ${min.toLocaleString("en-IN")})` : "";
+    if (p.discountType === "percentage") return `${p.discountValue}% off your order${minSuffix}`;
+    if (p.discountType === "flat") return `Rs. ${p.discountValue} off your order${minSuffix}`;
+    if (p.discountType === "bundle") return `Buy 2 Get 1 Free — cheapest item free per 3 items${minSuffix}`;
     return "";
   };
 
@@ -132,6 +138,7 @@ export function useCartPromo() {
     removePromo,
     getPromoEffectText,
     bundleItemsNeeded,
+    minOrderShortfall,
     hasPromoCodes: !!(promotions?.some((p) => p.isActive && p.code)),
     availablePromos,
   };

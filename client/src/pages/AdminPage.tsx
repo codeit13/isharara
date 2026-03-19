@@ -1940,7 +1940,7 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
   const [addOpen, setAddOpen] = useState(false);
   const [form, setForm] = useState({
     title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true,
-    firstOrderOnly: false, startDate: "", endDate: "",
+    firstOrderOnly: false, minOrderAmount: 0, startDate: "", endDate: "",
   });
 
   const addMutation = useMutation({
@@ -1956,7 +1956,7 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
       queryClient.invalidateQueries({ queryKey: ["/api/promotions"] });
       toast({ title: "Promotion added" });
       setAddOpen(false);
-      setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, startDate: "", endDate: "" });
+      setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, minOrderAmount: 0, startDate: "", endDate: "" });
     },
   });
 
@@ -1971,7 +1971,7 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
     <div data-testid="tab-promotions">
       <div className="flex items-center justify-between gap-2 mb-4">
         <p className="text-sm font-medium">{promotions.length} Promotions</p>
-        <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, startDate: "", endDate: "" }); }}>
+        <Dialog open={addOpen} onOpenChange={(open) => { setAddOpen(open); if (!open) setForm({ title: "", description: "", discountType: "percentage", discountValue: 10, code: "", isActive: true, firstOrderOnly: false, minOrderAmount: 0, startDate: "", endDate: "" }); }}>
           <DialogTrigger asChild>
             <Button size="sm" data-testid="button-add-promo"><Plus className="w-4 h-4 mr-1" /> Add Promo</Button>
           </DialogTrigger>
@@ -2017,6 +2017,17 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
               <div className="space-y-1"><Label className="text-xs">Code (optional)</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="B2G1, SUMMER20" /></div>
               <div className="flex items-center gap-2"><Switch checked={form.firstOrderOnly} onCheckedChange={(v) => setForm({ ...form, firstOrderOnly: v })} /><Label className="text-xs">First order only</Label></div>
               <p className="text-[10px] text-muted-foreground -mt-2">When enabled, this code applies only to customers who have never placed an order before.</p>
+              <div className="space-y-1">
+                <Label className="text-xs">Minimum order amount (₹)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={form.minOrderAmount}
+                  onChange={(e) => setForm({ ...form, minOrderAmount: Math.max(0, Number(e.target.value) || 0) })}
+                  placeholder="0 = no minimum"
+                />
+                <p className="text-[10px] text-muted-foreground">Discount applies only when cart subtotal (before shipping) is at least this amount. Use 0 for no threshold.</p>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1"><Label className="text-xs">Start Date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Optional — when promo becomes valid</p></div>
                 <div className="space-y-1"><Label className="text-xs">End Date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Optional — when promo expires</p></div>
@@ -2038,7 +2049,10 @@ function PromotionsTab({ promotions }: { promotions: Promotion[] }) {
               <div className="flex flex-wrap gap-1 mt-1">
                 {promo.code && <Badge variant="outline" className="text-xs font-mono">{promo.code}</Badge>}
                 <span className="text-[10px] text-muted-foreground">{promo.discountType} · {promo.discountValue}{promo.discountType === "percentage" ? "%" : ""}</span>
-                {(promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly && <Badge variant="secondary" className="text-[10px]">First order</Badge>}
+                {promo.firstOrderOnly && <Badge variant="secondary" className="text-[10px]">First order</Badge>}
+                {(promo.minOrderAmount ?? 0) > 0 && (
+                  <Badge variant="outline" className="text-[10px]">Min. Rs. {promo.minOrderAmount}</Badge>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -2066,7 +2080,8 @@ function EditPromoDialog({ promo }: { promo: Promotion }) {
     discountValue: promo.discountValue,
     code: promo.code || "",
     isActive: promo.isActive,
-    firstOrderOnly: (promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly ?? false,
+    firstOrderOnly: promo.firstOrderOnly ?? false,
+    minOrderAmount: promo.minOrderAmount ?? 0,
     startDate: promo.startDate ? new Date(promo.startDate).toISOString().slice(0, 10) : "",
     endDate: promo.endDate ? new Date(promo.endDate).toISOString().slice(0, 10) : "",
   });
@@ -2081,6 +2096,7 @@ function EditPromoDialog({ promo }: { promo: Promotion }) {
         code: form.code || null,
         isActive: form.isActive,
         firstOrderOnly: form.firstOrderOnly,
+        minOrderAmount: form.minOrderAmount,
         startDate: form.startDate ? new Date(form.startDate).toISOString() : null,
         endDate: form.endDate ? new Date(form.endDate).toISOString() : null,
       });
@@ -2101,7 +2117,8 @@ function EditPromoDialog({ promo }: { promo: Promotion }) {
       discountValue: promo.discountValue,
       code: promo.code || "",
       isActive: promo.isActive,
-      firstOrderOnly: (promo as Promotion & { firstOrderOnly?: boolean }).firstOrderOnly ?? false,
+      firstOrderOnly: promo.firstOrderOnly ?? false,
+      minOrderAmount: promo.minOrderAmount ?? 0,
       startDate: promo.startDate ? new Date(promo.startDate).toISOString().slice(0, 10) : "",
       endDate: promo.endDate ? new Date(promo.endDate).toISOString().slice(0, 10) : "",
     });
@@ -2150,6 +2167,17 @@ function EditPromoDialog({ promo }: { promo: Promotion }) {
           </div>
           <div className="space-y-1"><Label className="text-xs">Code (optional)</Label><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="B2G1" /></div>
           <div className="flex items-center gap-2"><Switch checked={form.firstOrderOnly} onCheckedChange={(v) => setForm({ ...form, firstOrderOnly: v })} /><Label className="text-xs">First order only</Label></div>
+          <div className="space-y-1">
+            <Label className="text-xs">Minimum order amount (₹)</Label>
+            <Input
+              type="number"
+              min={0}
+              value={form.minOrderAmount}
+              onChange={(e) => setForm({ ...form, minOrderAmount: Math.max(0, Number(e.target.value) || 0) })}
+              placeholder="0 = no minimum"
+            />
+            <p className="text-[10px] text-muted-foreground">Applies to cart subtotal before shipping. 0 = no minimum.</p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1"><Label className="text-xs">Start Date</Label><Input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Leave empty for no start</p></div>
             <div className="space-y-1"><Label className="text-xs">End Date</Label><Input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} /><p className="text-[10px] text-muted-foreground">Leave empty for no expiry</p></div>

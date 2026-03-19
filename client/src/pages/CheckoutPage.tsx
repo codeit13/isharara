@@ -44,7 +44,7 @@ export default function CheckoutPage() {
   const [upiState, setUpiState] = useState<"idle" | "pending" | "confirmed">("idle");
   const [upiOrderId, setUpiOrderId] = useState<number | null>(null);
   const [upiAmount, setUpiAmount] = useState<number>(0);
-  const { appliedPromo, getDiscountAmount, getPromoEffectText } = useCartPromo();
+  const { appliedPromo, getDiscountAmount, getPromoEffectText, minOrderShortfall } = useCartPromo();
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [showManualForm, setShowManualForm] = useState(false);
   const [orderSummaryOpen, setOrderSummaryOpen] = useState(false);
@@ -670,6 +670,19 @@ export default function CheckoutPage() {
                 <span className="text-muted-foreground">Shipping</span>
                 <span>{shipping === 0 ? "Free" : `Rs. ${shipping}`}</span>
               </div>
+              {appliedPromo && minOrderShortfall > 0 && (
+                <div className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2.5 text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-100">
+                  <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                    <span className="rounded-full border border-amber-300/60 bg-white/80 px-2 py-0.5 font-mono text-[11px] dark:bg-amber-900/40">
+                      {appliedPromo.code}
+                    </span>
+                    <span>Add Rs. {minOrderShortfall.toLocaleString("en-IN")} more to subtotal to use this code</span>
+                  </div>
+                  <Link href="/cart" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
+                    Back to cart
+                  </Link>
+                </div>
+              )}
               {appliedPromo && discountAmount > 0 && (
                 <div className="rounded-lg bg-green-50/60 px-3 py-2.5 text-green-700">
                   <div className="flex items-start justify-between gap-3">
@@ -743,6 +756,19 @@ export default function CheckoutPage() {
                   <span className="text-muted-foreground">Shipping</span>
                   <span>{shipping === 0 ? "Free" : `Rs. ${shipping}`}</span>
                 </div>
+                {appliedPromo && minOrderShortfall > 0 && (
+                  <div className="rounded-lg border border-amber-200/80 bg-amber-50/70 px-3 py-2.5 text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-100">
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                      <span className="rounded-full border border-amber-300/60 bg-white/80 px-2 py-0.5 font-mono text-[11px] dark:bg-amber-900/40">
+                        {appliedPromo.code}
+                      </span>
+                      <span>Add Rs. {minOrderShortfall.toLocaleString("en-IN")} more to subtotal to use this code</span>
+                    </div>
+                    <Link href="/cart" className="mt-2 inline-block text-xs font-medium text-primary hover:underline">
+                      Back to cart
+                    </Link>
+                  </div>
+                )}
                 {appliedPromo && discountAmount > 0 && (
                   <div className="rounded-lg bg-green-50/70 px-3 py-2.5 text-green-700">
                     <div className="flex items-start justify-between gap-3">
